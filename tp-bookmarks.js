@@ -204,7 +204,7 @@
       more.addEventListener('mousedown', (e) => e.preventDefault());
       bar.append(row, more);
       if (data.other.length) {
-        const o = mk({ id: 'other', title: 'Other bookmarks', children: data.other });
+        const o = mk({ id: data.otherId || 'other', title: 'Other bookmarks', children: data.other });
         o.classList.add('bmother');
         bar.appendChild(o);
       }

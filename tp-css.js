@@ -20,9 +20,12 @@ globalThis.TPX.CSS = `
 *:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
 *:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
 /* Keep every overlay scrollbar visible whenever the pointer is anywhere over Tab Peek. */
-:host(:hover) *{scrollbar-width:auto;scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
-:host(:hover) *::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
-:host(:hover) *::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
+:host(:hover) *,
+:host(.overlay-pointer-hover) *{scrollbar-width:auto;scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
+:host(:hover) *::-webkit-scrollbar-thumb,
+:host(.overlay-pointer-hover) *::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
+:host(:hover) *::-webkit-scrollbar-thumb:hover,
+:host(.overlay-pointer-hover) *::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
 .list,.bmlist,.bmstrip,.menu.scroll,.submenu.scroll{overscroll-behavior:contain}
 .list:hover,.list:focus-within,.bmlist:hover,.bmlist:focus-within,.bmstrip:hover,.bmstrip:focus-within,.menu.scroll:hover,.menu.scroll:focus-within,.submenu.scroll:hover,.submenu.scroll:focus-within{scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
 .list:hover::-webkit-scrollbar-thumb,.list:focus-within::-webkit-scrollbar-thumb,.bmlist:hover::-webkit-scrollbar-thumb,.bmlist:focus-within::-webkit-scrollbar-thumb,.bmstrip:hover::-webkit-scrollbar-thumb,.bmstrip:focus-within::-webkit-scrollbar-thumb,.menu.scroll:hover::-webkit-scrollbar-thumb,.menu.scroll:focus-within::-webkit-scrollbar-thumb,.submenu.scroll:hover::-webkit-scrollbar-thumb,.submenu.scroll:focus-within::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}

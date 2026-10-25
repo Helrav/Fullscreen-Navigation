@@ -1801,6 +1801,15 @@
     addStyles(root, CSS);
     ui = h('div', 'ui');
     ui.dataset.theme = settings.theme;
+    // Track the entire overlay hover state, not only the individual scroller under the pointer.
+    ui.addEventListener('pointerover', () => {
+      if (hostEl) hostEl.classList.add('overlay-pointer-hover');
+    });
+    ui.addEventListener('pointerout', (e) => {
+      if (!e.relatedTarget || !ui.contains(e.relatedTarget)) {
+        if (hostEl) hostEl.classList.remove('overlay-pointer-hover');
+      }
+    });
     const internalScrollers = '.list, .bmlist, .bmstrip, .menu.scroll, .submenu.scroll';
     ui.addEventListener('wheel', (e) => {
       const target = e.target instanceof Element ? e.target : null;
