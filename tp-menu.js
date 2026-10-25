@@ -114,6 +114,14 @@
       show(items, x, y, side);
     }
 
+    // Browser/page blur should dismiss extension-rendered menus just as it
+    // dismisses native context menus (e.g. Alt+Tab to another app).
+    window.addEventListener('blur', hide);
+    window.addEventListener('pagehide', hide);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') hide();
+    });
+
     // A click anywhere in the overlay that is not on the menu closes it.
     root.addEventListener('mousedown', (e) => {
       const target = e.target;

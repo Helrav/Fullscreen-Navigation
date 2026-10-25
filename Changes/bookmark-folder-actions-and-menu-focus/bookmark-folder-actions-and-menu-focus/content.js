@@ -1009,7 +1009,7 @@
       { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
       reopen,
       { sep: true },
-      { label: 'Task manager', action: () => send({ type: 'openTaskManager', windowId }) },
+      { label: 'Task manager', shortcut: 'Shift+Esc', action: () => send({ type: 'openTaskManager', windowId }) },
       { label: 'Settings', action: () => openSettingsCard() }
     ], x, y);
   }

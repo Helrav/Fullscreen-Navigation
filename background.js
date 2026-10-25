@@ -206,18 +206,14 @@ async function openFolderBookmarks(folderId, operation, senderTab) {
       return { ok: true, count: opened.length };
     }
     case 'openFolderWindow': {
-      const win = await api.windows.create({ url: urls[0], populate: true });
+      const win = await api.windows.create({ url: urls });
       if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
-      const opened = [win.tabs && win.tabs[0] && win.tabs[0].id].filter(Number.isInteger);
-      opened.push(...await addTabs(win.id, 1));
-      return { ok: true, count: opened.length };
+      return { ok: true, count: urls.length };
     }
     case 'openFolderIncognito': {
-      const win = await api.windows.create({ url: urls[0], incognito: true, populate: true });
+      const win = await api.windows.create({ url: urls, incognito: true });
       if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
-      const opened = [win.tabs && win.tabs[0] && win.tabs[0].id].filter(Number.isInteger);
-      opened.push(...await addTabs(win.id, 1));
-      return { ok: true, count: opened.length };
+      return { ok: true, count: urls.length };
     }
     case 'openFolderGroup': {
       if (typeof api.tabs.group !== 'function') return { ok: false, reason: 'tab-groups-unavailable' };
