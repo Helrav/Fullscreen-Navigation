@@ -1733,7 +1733,6 @@
       panelRect: () => els.panel.getBoundingClientRect(),
       placement: () => ({ left: 'right', right: 'left', top: 'below', bottom: 'above' })[settings.edge],
       send,
-      toggle: () => { settings.bookmarks = !settings.bookmarks; saveSettings(); update(); },
       setMode: (mode) => { settings.bookmarksMode = mode; saveSettings(); update(true); },
       open: openBookmark,
       tip: showTip,

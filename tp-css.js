@@ -283,34 +283,10 @@ globalThis.TPX.CSS = `
 /* ---------- bookmarks ---------- */
 .bm{position:fixed;z-index:4;zoom:var(--u,1);display:flex;align-items:center;pointer-events:none}
 .bm.hidden{display:none}
-.bm[data-pos=right]{flex-direction:row-reverse}
-.bm[data-pos=left]{flex-direction:row}
-.bm[data-pos=below]{flex-direction:column-reverse}
-.bm[data-pos=above]{flex-direction:column}
-.bmtab{pointer-events:auto;flex:none;display:grid;place-items:center;padding:0;border:0;background:var(--bg);color:var(--muted);cursor:pointer;box-shadow:0 0 0 1px var(--line)}
-.bmtab:hover{color:var(--fg)}
-.bmtab svg{width:14px;height:14px;fill:currentColor;transition:transform .15s}
-.bm[data-pos=right] .bmtab,.bm[data-pos=left] .bmtab{width:16px;height:56px}
-.bm[data-pos=below] .bmtab,.bm[data-pos=above] .bmtab{width:56px;height:16px}
-.bm[data-pos=right] .bmtab{border-radius:0 8px 8px 0}
-.bm[data-pos=left] .bmtab{border-radius:8px 0 0 8px}
-.bm[data-pos=below] .bmtab{border-radius:0 0 8px 8px}
-.bm[data-pos=above] .bmtab{border-radius:8px 8px 0 0}
-.bm[data-pos=right] .bmtab svg{transform:rotate(0)}
-.bm[data-pos=left] .bmtab svg{transform:rotate(180deg)}
-.bm[data-pos=below] .bmtab svg{transform:rotate(90deg)}
-.bm[data-pos=above] .bmtab svg{transform:rotate(270deg)}
-.bm.open[data-pos=right] .bmtab svg{transform:rotate(180deg)}
-.bm.open[data-pos=left] .bmtab svg{transform:rotate(0)}
-.bm.open[data-pos=below] .bmtab svg{transform:rotate(270deg)}
-.bm.open[data-pos=above] .bmtab svg{transform:rotate(90deg)}
-/* When open, the toggle and bookmark content become one continuous drawer. */
-.bm.open .bmtab{border-radius:0;box-shadow:none}
+/* Bookmarks are a drawer attached directly to the overlay, with no arrow tab. */
+.bm[data-pos=right],.bm[data-pos=left]{flex-direction:row}
+.bm[data-pos=below],.bm[data-pos=above]{flex-direction:column}
 .bm.open .bmc{box-shadow:none;border:1px solid var(--line)}
-.bm.open[data-pos=right] .bmc{border-left:0}
-.bm.open[data-pos=left] .bmc{border-right:0}
-.bm.open[data-pos=below] .bmc{border-top:0}
-.bm.open[data-pos=above] .bmc{border-bottom:0}
 .bm:not(.open) .bmc{display:none}
 .bmc{pointer-events:auto;display:flex;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 6px 20px rgba(0,0,0,.22);overflow:hidden}
 .bm[data-mode=strip] .bmc{flex-direction:column;width:44px;align-self:stretch}
@@ -367,5 +343,5 @@ globalThis.TPX.CSS = `
 /* Docked horizontal rails sit flush to the physical viewport edge. */
 .panel[data-style=docked][data-dir=h] .list{padding-top:0;padding-bottom:0}
 .tab.drop-invalid{cursor:not-allowed;opacity:.48;outline:2px solid #d9534f;outline-offset:-2px}
-@media (prefers-reduced-motion:reduce){.panel,.pin svg,.chev,.bmtab svg{transition:none!important}}
+@media (prefers-reduced-motion:reduce){.panel,.pin svg,.chev{transition:none!important}}
 `;

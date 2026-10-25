@@ -6,22 +6,18 @@
 
   X.createBookmarks = (env) => {
     const { ui, h } = env;
-    const BAR_H = 36, STRIP_W = 44, TAB_T = 16;
+    const BAR_H = 36, STRIP_W = 44;
 
     let data = null, loading = false, failed = false, lastKey = '', fitRaf = 0;
     const openIds = new Set();
 
     const el = h('div', 'bm hidden');
     const content = h('div', 'bmc');
-    const tab = h('button', 'bmtab');
-    tab.type = 'button';
-    tab.title = 'Bookmarks';
-    tab.appendChild(env.chevron());
-    el.append(content, tab);
+    // The bookmarks drawer is attached directly to the overlay. It is opened
+    // by the existing Bookmarks toolbar icon; there is no separate chevron tab.
+    el.appendChild(content);
     ui.appendChild(el);
     env.hoverable(el);
-    tab.addEventListener('mousedown', (e) => e.preventDefault());
-    tab.addEventListener('click', () => env.toggle());
 
     const horizontal = () => el.dataset.pos === 'below' || el.dataset.pos === 'above';
 
@@ -248,9 +244,9 @@
     function thickness() {
       const s = env.settings();
       if (!env.shown() || !s.bookmarks) return 0;
-      if (el.dataset.pos === 'below' || el.dataset.pos === 'above') return BAR_H + TAB_T;
-      // Card width includes 8px margins on either side; strip is icon-only.
-      return s.bookmarksMode === 'strip' ? STRIP_W + TAB_T : 250 + TAB_T;
+      if (el.dataset.pos === 'below' || el.dataset.pos === 'above') return BAR_H;
+      // The drawer starts directly at the overlay edge; no chevron tab is present.
+      return s.bookmarksMode === 'strip' ? STRIP_W : 250;
     }
 
     new ResizeObserver(() => { if (horizontal() && env.settings().bookmarks) fitSoon(); }).observe(content);
