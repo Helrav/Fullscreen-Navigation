@@ -10,15 +10,19 @@ globalThis.TPX.CSS = `
 .ui[data-theme=dark]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14)}
 @media (prefers-color-scheme:dark){.ui[data-theme=auto]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14)}}
 
-/* Minimal scrollbars: no track, and a thumb only while hovering the scroller. */
+/* Minimal scrollbars: invisible track; a wider, clearly visible thumb on hover. */
 *{scrollbar-width:thin;scrollbar-color:transparent transparent}
-*:hover{scrollbar-color:color-mix(in srgb,var(--muted) 70%,transparent) transparent}
-*::-webkit-scrollbar{width:5px;height:5px;background:transparent}
+*:hover{scrollbar-color:color-mix(in srgb,var(--muted) 82%,transparent) transparent}
+*::-webkit-scrollbar{width:7px;height:7px;background:transparent}
 *::-webkit-scrollbar-track{background:transparent;border:0}
 *::-webkit-scrollbar-corner{background:transparent}
 *::-webkit-scrollbar-thumb{background:transparent;border:1px solid transparent;border-radius:999px;background-clip:padding-box}
-*:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 70%,transparent)}
+*:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 82%,transparent)}
 *:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
+.list,.bmlist,.bmstrip,.menu.scroll,.submenu.scroll{overscroll-behavior:contain}
+.list:hover,.list:focus-within,.bmlist:hover,.bmlist:focus-within,.bmstrip:hover,.bmstrip:focus-within,.menu.scroll:hover,.menu.scroll:focus-within,.submenu.scroll:hover,.submenu.scroll:focus-within{scrollbar-color:color-mix(in srgb,var(--muted) 82%,transparent) transparent}
+.list:hover::-webkit-scrollbar-thumb,.list:focus-within::-webkit-scrollbar-thumb,.bmlist:hover::-webkit-scrollbar-thumb,.bmlist:focus-within::-webkit-scrollbar-thumb,.bmstrip:hover::-webkit-scrollbar-thumb,.bmstrip:focus-within::-webkit-scrollbar-thumb,.menu.scroll:hover::-webkit-scrollbar-thumb,.menu.scroll:focus-within::-webkit-scrollbar-thumb,.submenu.scroll:hover::-webkit-scrollbar-thumb,.submenu.scroll:focus-within::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 82%,transparent)}
+.list:hover::-webkit-scrollbar-thumb:hover,.bmlist:hover::-webkit-scrollbar-thumb:hover,.bmstrip:hover::-webkit-scrollbar-thumb:hover,.menu.scroll:hover::-webkit-scrollbar-thumb:hover,.submenu.scroll:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
 
 
 /* ---------- panel ---------- */
@@ -55,10 +59,10 @@ globalThis.TPX.CSS = `
 .panel[data-style=docked][data-edge=bottom] .rz[data-h=n],
 .panel[data-style=windowed] .rz{display:block}
 /* The hit target is wider, but the only visible feedback is a slim strip at the exact edge. */
-.rz[data-h=e]{top:10px;bottom:10px;right:0;width:12px;cursor:ew-resize}
-.rz[data-h=w]{top:10px;bottom:10px;left:0;width:12px;cursor:ew-resize}
-.rz[data-h=n]{left:10px;right:10px;top:0;height:12px;cursor:ns-resize}
-.rz[data-h=s]{left:10px;right:10px;bottom:0;height:12px;cursor:ns-resize}
+.rz[data-h=e]{top:10px;bottom:10px;right:0;width:2px;cursor:ew-resize}
+.rz[data-h=w]{top:10px;bottom:10px;left:0;width:2px;cursor:ew-resize}
+.rz[data-h=n]{left:10px;right:10px;top:0;height:2px;cursor:ns-resize}
+.rz[data-h=s]{left:10px;right:10px;bottom:0;height:2px;cursor:ns-resize}
 .rz[data-h=ne]{top:0;right:0;width:18px;height:18px;cursor:nesw-resize}
 .rz[data-h=sw]{bottom:0;left:0;width:18px;height:18px;cursor:nesw-resize}
 .rz[data-h=nw]{top:0;left:0;width:18px;height:18px;cursor:nwse-resize}
@@ -298,6 +302,7 @@ globalThis.TPX.CSS = `
 .bm{position:fixed;z-index:4;zoom:var(--u,1);display:flex;align-items:center;pointer-events:none}
 .bm.hidden{display:none}
 .bm.pending-place{visibility:hidden}
+.bm.dragging-overlay{visibility:hidden!important}
 /* Bookmarks are a drawer attached directly to the overlay, with no arrow tab. */
 .bm[data-pos=right],.bm[data-pos=left]{flex-direction:row}
 .bm[data-pos=below],.bm[data-pos=above]{flex-direction:column}

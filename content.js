@@ -435,30 +435,41 @@
       return;
     }
     const r = els.panel.getBoundingClientRect();
-    const size = 6;          // only five pixels extend beyond the panel edge
-    const inset = 8;         // keep the target away from rounded/end corners
+    const size = 3;          // a narrow, outside-only resize buffer
+    const inset = 12;        // keep the target away from rounded/end corners
     el.dataset.axis = isVertical() ? 'x' : 'y';
     el.dataset.handle = ({ left: 'e', right: 'w', top: 's', bottom: 'n' })[settings.edge];
     Object.assign(el.style, {
       display: 'block', left: '0px', top: '0px', width: '0px', height: '0px',
       cursor: isVertical() ? 'ew-resize' : 'ns-resize'
     });
-    if (settings.edge === 'left') Object.assign(el.style, { left: (r.right - 1) + 'px', top: (r.top + inset) + 'px', width: size + 'px', height: Math.max(0, r.height - inset * 2) + 'px' });
-    else if (settings.edge === 'right') Object.assign(el.style, { left: (r.left - size + 1) + 'px', top: (r.top + inset) + 'px', width: size + 'px', height: Math.max(0, r.height - inset * 2) + 'px' });
-    else if (settings.edge === 'top') Object.assign(el.style, { left: (r.left + inset) + 'px', top: (r.bottom - 1) + 'px', width: Math.max(0, r.width - inset * 2) + 'px', height: size + 'px' });
-    else Object.assign(el.style, { left: (r.left + inset) + 'px', top: (r.top - size + 1) + 'px', width: Math.max(0, r.width - inset * 2) + 'px', height: size + 'px' });
+    if (settings.edge === 'left') Object.assign(el.style, { left: r.right + 'px', top: (r.top + inset) + 'px', width: size + 'px', height: Math.max(0, r.height - inset * 2) + 'px' });
+    else if (settings.edge === 'right') Object.assign(el.style, { left: (r.left - size) + 'px', top: (r.top + inset) + 'px', width: size + 'px', height: Math.max(0, r.height - inset * 2) + 'px' });
+    else if (settings.edge === 'top') Object.assign(el.style, { left: (r.left + inset) + 'px', top: r.bottom + 'px', width: Math.max(0, r.width - inset * 2) + 'px', height: size + 'px' });
+    else Object.assign(el.style, { left: (r.left + inset) + 'px', top: (r.top - size) + 'px', width: Math.max(0, r.width - inset * 2) + 'px', height: size + 'px' });
   }
 
   function nearResizeTarget(x = lastPointer.x, y = lastPointer.y) {
     if (!shown || !els.panel || isBox() || !Number.isFinite(x) || !Number.isFinite(y)) return false;
     const r = els.panel.getBoundingClientRect();
-    const tolerance = 10; // invisible over-aim grace around the active resize edge
+    const tolerance = 4; // small resize hit band; keep nearby scrollbar thumbs accessible
     if (isVertical()) {
       const activeX = settings.edge === 'left' ? r.right : r.left;
-      return Math.abs(x - activeX) <= tolerance && y >= r.top - 6 && y <= r.bottom + 6;
+      return Math.abs(x - activeX) <= tolerance && y >= r.top - 4 && y <= r.bottom + 4;
     }
     const activeY = settings.edge === 'top' ? r.bottom : r.top;
-    return Math.abs(y - activeY) <= tolerance && x >= r.left - 6 && x <= r.right + 6;
+    return Math.abs(y - activeY) <= tolerance && x >= r.left - 4 && x <= r.right + 4;
+  }
+
+  function nearPanelEdge(x = lastPointer.x, y = lastPointer.y) {
+    if (!shown || !els.panel || isBox() || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const r = els.panel.getBoundingClientRect();
+    const grace = 18; // a small deadband outside/inside the overlay edge
+    if (x < r.left - grace || x > r.right + grace || y < r.top - grace || y > r.bottom + grace) return false;
+    return Math.abs(x - r.left) <= grace
+      || Math.abs(x - r.right) <= grace
+      || Math.abs(y - r.top) <= grace
+      || Math.abs(y - r.bottom) <= grace;
   }
 
   const clearOpen = () => { clearTimeout(openTimer); openTimer = 0; };
@@ -486,7 +497,7 @@
     if (closeTimer) return;
     closeTimer = setTimeout(() => {
       closeTimer = 0;
-      if (hoverPanel || lastInZone || nearResizeTarget() || pinned || resizing || hotZoneEditMode || dragIds || hasBlockingPopup() || (contextMenu && contextMenu.isOpen())) return;
+      if (hoverPanel || lastInZone || nearResizeTarget() || nearPanelEdge() || pinned || resizing || hotZoneEditMode || dragIds || hasBlockingPopup() || (contextMenu && contextMenu.isOpen())) return;
       if (root && root.activeElement === els.search) return;
       if (isBox()) return;
       closePeek();
@@ -523,7 +534,7 @@
     if (!lastInZone) needRearm = false;
     checkOpen();
     if (peek && !pinned) {
-      if (lastInZone || hoverPanel || nearResizeTarget(e.clientX, e.clientY)) clearClose(); else scheduleClose();
+      if (lastInZone || hoverPanel || nearResizeTarget(e.clientX, e.clientY) || nearPanelEdge(e.clientX, e.clientY)) clearClose(); else scheduleClose();
     }
   }
 
@@ -1618,6 +1629,7 @@
       // tiny stacked-tabs icon that follows the pointer. The real panel stays
       // hidden underneath so release can still resolve to docked/windowed mode.
       els.panel.classList.add('moving', 'dragging-overlay');
+      if (bookmarks) bookmarks.el.classList.add('dragging-overlay');
       els.panel.dataset.style = 'windowed';
       if (els.dragPreview) {
         els.dragPreview.style.display = 'grid';
@@ -1632,6 +1644,7 @@
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
       els.panel.classList.remove('moving', 'dragging-overlay');
+      if (bookmarks) bookmarks.el.classList.remove('dragging-overlay');
       if (els.dragPreview) els.dragPreview.style.display = 'none';
       if (els.snap) els.snap.style.display = 'none';
       dockDrag = null;
@@ -1724,6 +1737,28 @@
     addStyles(root, CSS);
     ui = h('div', 'ui');
     ui.dataset.theme = settings.theme;
+    const internalScrollers = '.list, .bmlist, .bmstrip, .menu.scroll, .submenu.scroll';
+    ui.addEventListener('wheel', (e) => {
+      const target = e.target instanceof Element ? e.target : null;
+      const scroller = target && target.closest(internalScrollers);
+      if (scroller) {
+        const scale = e.deltaMode === 1 ? 16
+          : (e.deltaMode === 2 ? Math.max(scroller.clientWidth, scroller.clientHeight, 1) : 1);
+        let dx = e.deltaX * scale;
+        let dy = e.deltaY * scale;
+        // On the horizontal rail, a conventional vertical wheel moves the tab row sideways.
+        if (scroller === els.list && !isVertical() && Math.abs(dy) > Math.abs(dx)) {
+          dx = dy;
+          dy = 0;
+        }
+        if (dx) scroller.scrollLeft += dx;
+        if (dy) scroller.scrollTop += dy;
+      }
+      // Always consume wheel input over Tab Peek, even on blank/non-scrollable
+      // surfaces or at a scroll boundary, so the website underneath never moves.
+      e.preventDefault();
+      e.stopPropagation();
+    }, { capture: true, passive: false });
     ui.addEventListener('pointerdown', (e) => {
       if (!searchPopupOpen) return;
       const target = e.target;
@@ -1934,12 +1969,6 @@
       if (node) { e.preventDefault(); closeTabs([Number(node.dataset.id)]); }
     });
     els.list.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
-    els.list.addEventListener('wheel', (e) => {
-      if (isVertical() || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-      els.list.scrollLeft += e.deltaY;
-      e.preventDefault();
-    }, { passive: false });
-
     // Multi-tab drag/drop with real before/after positions and named destinations.
     const clearMarks = () => {
       ui.querySelectorAll('.drop-before,.drop-after,.drop-win,.drop-into,.drop-reorder,.drop-invalid,[data-drop]').forEach((node) => {

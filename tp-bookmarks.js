@@ -208,7 +208,11 @@
         b.type = 'button';
         b.appendChild(icon(n));
         b.addEventListener('mousedown', (e) => e.preventDefault());
-        b.addEventListener('mouseenter', () => env.tip(b.getBoundingClientRect(), label(n), label(n) ? (n.url || '') : '', side));
+        b.addEventListener('mouseenter', () => {
+          const title = label(n);
+          if (title) env.tip(b.getBoundingClientRect(), title, n.url || '', side);
+          else env.hideTip();
+        });
         b.addEventListener('mouseleave', () => env.hideTip());
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
