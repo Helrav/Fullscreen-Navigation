@@ -52,7 +52,7 @@
         return s;
       }
       if (X.favicons) {
-        X.favicons.mount(s, n.url, '', label(n), { serviceFirst: true });
+        X.favicons.mount(s, n.url, '', label(n), { serviceFirst: true, emptyFallback: !label(n) });
       } else letter();
       return s;
     }

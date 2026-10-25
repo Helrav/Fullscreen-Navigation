@@ -154,9 +154,14 @@ function tpPushAllowed(s, host) {
     };
     states.set(el, state);
     const isCurrent = () => states.get(el) === state;
-    const fallback = ((String(label || '').trim().charAt(0)) || '•').toUpperCase();
-    el.textContent = fallback;
-    el.classList.add('letter');
+    const fallback = ((String(label || '').trim().charAt(0)) || (options.emptyFallback ? '' : '•')).toUpperCase();
+    if (fallback) {
+      el.textContent = fallback;
+      el.classList.add('letter');
+    } else {
+      el.replaceChildren();
+      el.classList.remove('letter');
+    }
 
     const scheduleRetry = () => {
       // Retry native/service sources only: the browser may not have populated

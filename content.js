@@ -1693,6 +1693,7 @@
     const move = (ev) => {
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       if (!moved && Math.hypot(dx, dy) < 3) return;
+      if (!moved && bookmarks) bookmarks.el.classList.add('dragging-overlay');
       moved = true;
       const pw = vw() / u, ph = vh() / u;
       settings.winRect = {
@@ -1707,6 +1708,7 @@
       window.removeEventListener('pointermove', move, true);
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
+      if (bookmarks) bookmarks.el.classList.remove('dragging-overlay');
       if (moved) saveSettings();
     };
     window.addEventListener('pointermove', move, true);
