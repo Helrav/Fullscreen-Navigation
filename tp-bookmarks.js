@@ -307,7 +307,6 @@
             }
           } else {
             row.append(h('span', 'bmsp'), icon(n), h('span', 'bmt', label(n)));
-            if (!label(n) && n.url) row.title = n.url;
             row.addEventListener('click', (e) => openBm(n, e));
             row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
             row.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
