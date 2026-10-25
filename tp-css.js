@@ -146,9 +146,6 @@ globalThis.TPX.CSS = `
 .panel.overlay-collapsed .sizebadge{display:none!important}
 .panel.overlay-collapsed .searchrow{display:flex;flex:0 0 auto;align-items:center;justify-content:center;gap:0;width:auto;min-width:0;min-height:0}
 .panel.overlay-collapsed .overlay-toggle{display:grid;flex:none;width:36px;height:36px;place-items:center;padding:0}
-.panel[data-style=docked][data-dir=v].overlay-collapsed{width:44px!important}
-.panel[data-style=docked][data-dir=h].overlay-collapsed{height:44px!important}
-.panel[data-style=windowed].overlay-collapsed{width:44px!important;height:44px!important}
 .panel.overlay-collapsed~.bm{display:none!important}
 .pin svg{transition:transform .15s}
 .pin[aria-pressed=false] svg{transform:rotate(45deg)}

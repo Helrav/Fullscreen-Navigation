@@ -310,8 +310,8 @@
             if (isOpen) c.classList.add('o');
             row.append(c, icon(n), h('span', 'bmt', label(n)));
             row.addEventListener('click', () => {
-              if (openIds.has(n.id)) return;
-              openIds.add(n.id);
+              if (openIds.has(n.id)) openIds.delete(n.id);
+              else openIds.add(n.id);
               renderContent();
             });
             row.addEventListener('contextmenu', (e) => showContextMenu(e, n));

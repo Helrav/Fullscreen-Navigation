@@ -13,7 +13,6 @@
 
   let settings = tpNormalize();
   let pinned = false, fullscreen = false, peek = false, shown = false;
-  let overlayCollapsed = false;
   let u = 1;                   // 1 / browser zoom: keeps the overlay the same real size on every page
   let data = { cur: -1, windows: [], groups: {} };
   let flat = [];
@@ -217,10 +216,9 @@
 
   async function loadStorage() {
     try {
-      const r = await api.storage.local.get(['settings', 'pinned', 'overlayCollapsed', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId']);
+      const r = await api.storage.local.get(['settings', 'pinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId']);
       settings = tpNormalize(r.settings);
       pinned = !!r.pinned;
-      overlayCollapsed = !!r.overlayCollapsed;
       collapsed = r.collapsed || {};
       windowNames = r.windowNames || {};
       if (Array.isArray(r.toolbarOrder)) {
@@ -1463,6 +1461,7 @@
     }
     panel.dataset.side = isBox() ? 'start' : (s.edge === 'right' ? 'end' : 'start');
     panel.dataset.dir = (isBox() || isVertical()) ? 'v' : 'h';
+    syncOverlayCollapsedState();
     panel.classList.toggle('resizing', resizing);
     const compact = currentWidthUnits() < COMPACT_BELOW;
     panel.classList.toggle('compact', compact);
@@ -1473,20 +1472,70 @@
     updateResizeBuffer();
   }
 
+  // Collapse is a size state, not a separate mode. This also recognizes a
+  // manually resized overlay at its narrow edge size.
+  function isOverlayCollapsed() {
+    if (isBox()) return (settings.winRect?.w ?? settings.panelWidth ?? 360) <= 60;
+    if (isVertical()) return Number(settings.panelWidth) <= 60;
+    return Number(settings.barHeight) <= 48;
+  }
+
   function syncOverlayToggle() {
     if (!els.overlayToggle) return;
+    const collapsed = isOverlayCollapsed();
     const path = els.overlayToggle.querySelector('path');
-    if (path) path.setAttribute('d', overlayCollapsed ? ICON_OVERLAY_EXPAND : ICON_OVERLAY_COLLAPSE);
-    const label = overlayCollapsed ? 'Expand overlay' : 'Collapse overlay';
+    if (path) path.setAttribute('d', collapsed ? ICON_OVERLAY_EXPAND : ICON_OVERLAY_COLLAPSE);
+    const label = collapsed ? 'Expand overlay' : 'Collapse overlay';
     els.overlayToggle.title = label;
     els.overlayToggle.setAttribute('aria-label', label);
-    els.overlayToggle.setAttribute('aria-expanded', String(!overlayCollapsed));
-    els.overlayToggle.setAttribute('aria-pressed', String(overlayCollapsed));
+    els.overlayToggle.setAttribute('aria-expanded', String(!collapsed));
+    els.overlayToggle.setAttribute('aria-pressed', String(collapsed));
+  }
+
+  function syncOverlayCollapsedState() {
+    if (els.panel) els.panel.classList.toggle('overlay-collapsed', isOverlayCollapsed());
+    syncOverlayToggle();
   }
 
   function toggleOverlayCollapsed() {
-    overlayCollapsed = !overlayCollapsed;
-    try { api.storage.local.set({ overlayCollapsed }); } catch (_) {}
+    const collapsed = isOverlayCollapsed();
+    const viewportWidth = vw() / u;
+    const viewportHeight = vh() / u;
+
+    if (isBox()) {
+      const rect = ensureWindowRect();
+      if (collapsed) {
+        const maxWidth = Math.min(800, Math.max(52, viewportWidth - 12));
+        const width = tpClamp(Math.round(viewportWidth * 0.2), 52, maxWidth);
+        const right = rect.x + rect.w;
+        const x = settings.edge === 'right' ? right - width : rect.x;
+        settings.winRect = {
+          ...rect,
+          x: tpClamp(x, 0, Math.max(0, viewportWidth - width)),
+          w: width
+        };
+      } else {
+        const width = 52;
+        const right = rect.x + rect.w;
+        const x = settings.edge === 'right' ? right - width : rect.x;
+        settings.winRect = {
+          ...rect,
+          x: tpClamp(x, 0, Math.max(0, viewportWidth - width)),
+          w: width
+        };
+      }
+    } else if (isVertical()) {
+      settings.panelWidth = collapsed
+        ? tpClamp(Math.round(viewportWidth * 0.2), 52, 800)
+        : 52;
+    } else {
+      settings.barHeight = collapsed
+        ? tpClamp(Math.round(viewportHeight * 0.2), 40, 400)
+        : 40;
+    }
+
+    saveSettings();
+    applyGeometry();
     update(true);
   }
 
@@ -1498,9 +1547,8 @@
     if (vis && !shown) { needCenter = true; measure(); placeHint(); }
     shown = vis;
     els.panel.classList.toggle('hidden', !vis);
-    els.panel.classList.toggle('overlay-collapsed', overlayCollapsed);
-    syncOverlayToggle();
-    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks && !overlayCollapsed));
+    syncOverlayCollapsedState();
+    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks && !isOverlayCollapsed()));
     if (!(vis && isBox() && settings.bookmarks)) {
       for (const cls of ['bookmarks-left', 'bookmarks-top', 'bookmarks-bottom']) els.panel.classList.remove(cls);
     }
@@ -2254,10 +2302,6 @@
           peek = isBox() ? false : !v;
           update();
         }
-      }
-      if (ch.overlayCollapsed) {
-        overlayCollapsed = !!ch.overlayCollapsed.newValue;
-        update(true);
       }
       if (ch.windowNames) {
         windowNames = ch.windowNames.newValue || {};
