@@ -29,6 +29,31 @@
     const label = (n) => n && typeof n.title === 'string' && n.title.trim()
       ? n.title
       : (n && n.url ? '' : 'Folder');
+    const canOpenBookmarkUrl = (url) => /^(https?|ftp|file|about|chrome|edge|brave|vivaldi|opera):/i.test(String(url || ''))
+      && !/^javascript:/i.test(String(url || ''));
+    const bookmarkTooltip = (n) => {
+      const name = label(n);
+      return {
+        title: name || (n && n.url ? String(n.url) : ''),
+        detail: name && n && n.url ? String(n.url) : ''
+      };
+    };
+    function bookmarkTooltipSide() {
+      const pos = el.dataset.pos || '';
+      if (pos === 'left' || pos === 'floating-left') return 'left';
+      if (pos === 'right' || pos === 'floating-right') return 'right';
+      if (pos === 'above' || pos === 'floating-top') return 'above';
+      if (pos === 'below' || pos === 'floating-bottom') return 'below';
+      return 'right';
+    }
+    function attachBookmarkTooltip(target, n, preferredSide) {
+      const tip = bookmarkTooltip(n);
+      if (!tip.title || !env.tip) return;
+      target.addEventListener('mouseenter', () => {
+        env.tip(target.getBoundingClientRect(), tip.title, tip.detail, preferredSide || bookmarkTooltipSide());
+      });
+      target.addEventListener('mouseleave', () => { if (env.hideTip) env.hideTip(); });
+    }
 
     // ----- pieces -----
     function icon(n) {
@@ -66,8 +91,8 @@
     function toItems(nodes) {
       if (!nodes.length) return [{ label: '(empty)', disabled: true }];
       return nodes.map((n) => (n.children
-        ? { label: label(n), title: label(n), icon: () => icon(n), sub: toItems(n.children), onContext: (e) => showContextMenu(e, n) }
-        : { label: label(n), title: n.url || label(n), icon: () => icon(n), action: () => openBm(n, null), onContext: (e) => showContextMenu(e, n) }));
+        ? { label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n), sub: toItems(n.children), onContext: (e) => showContextMenu(e, n) }
+        : { label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n), action: () => openBm(n, null), onContext: (e) => showContextMenu(e, n) }));
     }
 
 
@@ -79,6 +104,8 @@
         : (n && n.parentId != null ? n.parentId : (data && data.barId));
       const targetId = n && n.id;
       const isPage = !!(n && n.url);
+      const isFolder = !!(n && Array.isArray(n.children));
+      const folderCount = isFolder ? n.children.filter((child) => child && child.url && canOpenBookmarkUrl(child.url)).length : 0;
       const [clip, capabilities] = await Promise.all([
         env.send({ type: 'bookmarkAction', op: 'clipboardGet' }),
         env.send({ type: 'bookmarkAction', op: 'capabilities' })
@@ -112,11 +139,19 @@
         disabled: !targetParentId || !env.addBookmark,
         action: () => env.addBookmark && env.addBookmark('folder', String(targetParentId))
       };
-      const items = [
+      const openItems = isFolder ? [
+        action('Open all (' + folderCount + ')', 'openFolder', { id: targetId }, folderCount > 0),
+        action('Open all (' + folderCount + ') in new window', 'openFolderWindow', { id: targetId }, folderCount > 0),
+        action('Open all (' + folderCount + ') in incognito window', 'openFolderIncognito', { id: targetId }, folderCount > 0),
+        action('Open all (' + folderCount + ') in new tab group', 'openFolderGroup', { id: targetId }, folderCount > 0 && !!(capabilities && capabilities.tabGroups))
+      ] : [
         action('Open in new tab', 'openTab', { url: n && n.url }, isPage),
         action('Open in new window', 'openWindow', { url: n && n.url }, isPage),
         action('Open in split view', 'openSplit', { url: n && n.url }, isPage && !!(capabilities && capabilities.splitView)),
-        action('Open in Incognito window', 'openIncognito', { url: n && n.url }, isPage),
+        action('Open in Incognito window', 'openIncognito', { url: n && n.url }, isPage)
+      ];
+      const items = [
+        ...openItems,
         { sep: true },
         edit,
         { sep: true },
@@ -169,7 +204,7 @@
       more.addEventListener('mousedown', (e) => e.preventDefault());
       bar.append(row, more);
       if (data.other.length) {
-        const o = mk({ id: 'other', title: 'Other bookmarks', children: data.other });
+        const o = mk({ id: data.otherId || 'other', title: 'Other bookmarks', children: data.other });
         o.classList.add('bmother');
         bar.appendChild(o);
       }
@@ -197,13 +232,21 @@
 
     // ----- vertical strip: icons only -----
     function renderStrip() {
-      const head = h('button', 'tbtn bmmode', 'Names');
-      head.type = 'button';
-      head.title = 'Show names';
-      head.addEventListener('mousedown', (e) => e.preventDefault());
-      head.addEventListener('click', () => env.setMode('card'));
+      const modeButton = h('button', 'tbtn bmmode', 'Names');
+      modeButton.type = 'button';
+      modeButton.title = 'Show names';
+      modeButton.addEventListener('mousedown', (e) => e.preventDefault());
+      modeButton.addEventListener('click', () => env.setMode('card'));
+      let head = modeButton;
+      if (el.dataset.mode === 'floating') {
+        head = h('div', 'bmhead bmstriphead');
+        head.title = 'Drag this header to move bookmarks around the floating overlay';
+        head.appendChild(modeButton);
+        head.addEventListener('pointerdown', startFloatingBookmarkDrag);
+      }
       const list = h('div', 'bmstrip');
-      const side = el.dataset.pos === 'left' ? 'left' : 'right';
+      const pos = el.dataset.pos || '';
+      const side = pos.endsWith('left') ? 'left' : pos.endsWith('right') ? 'right' : (pos.endsWith('top') ? 'above' : 'below');
       for (const n of allTop()) {
         const b = h('button', 'bmicon');
         b.type = 'button';
@@ -245,7 +288,7 @@
         for (const n of nodes) {
           const row = h('div', 'bmr');
           row.style.paddingLeft = (8 + depth * 14) + 'px';
-          row.title = n.url || label(n);
+          attachBookmarkTooltip(row, n);
           if (n.children) {
             const isOpen = openIds.has(n.id);
             const c = env.chevron();
@@ -264,7 +307,6 @@
             }
           } else {
             row.append(h('span', 'bmsp'), icon(n), h('span', 'bmt', label(n)));
-            if (!label(n) && n.url) row.title = n.url;
             row.addEventListener('click', (e) => openBm(n, e));
             row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
             row.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
@@ -279,11 +321,14 @@
 
     function renderContent() {
       content.replaceChildren();
-      if (!env.settings().bookmarks) return;
+      const s = env.settings();
+      if (!s.bookmarks) return;
       if (!data) { content.appendChild(h('div', 'bmempty', loading ? 'Loading…' : 'Bookmarks are not available')); return; }
-      if (el.dataset.mode === 'floating') renderCard();
-      else if (horizontal()) renderBar();
-      else if (env.settings().bookmarksMode === 'strip') renderStrip();
+      if (el.dataset.mode === 'floating') {
+        if (s.bookmarksMode === 'strip') renderStrip();
+        else renderCard();
+      } else if (horizontal()) renderBar();
+      else if (s.bookmarksMode === 'strip') renderStrip();
       else renderCard();
     }
 
@@ -306,15 +351,16 @@
 
     function resolveFloatingEdge(preferred, spaces) {
       const opposite = { left: 'right', right: 'left', top: 'bottom', bottom: 'top' };
+      const minSize = env.settings().bookmarksMode === 'strip' ? STRIP_W : FLOATING_BOOKMARK_MIN;
       let edge = preferred;
       if (!['left', 'right', 'top', 'bottom'].includes(edge)) {
         edge = (spaces.right >= FLOATING_BOOKMARK_MAX || spaces.right >= spaces.left) ? 'right' : 'left';
       }
-      if (spaces[edge] >= FLOATING_BOOKMARK_MIN) return edge;
-      if (spaces[opposite[edge]] >= FLOATING_BOOKMARK_MIN) return opposite[edge];
-      const fitting = ['left', 'right', 'top', 'bottom'].filter((side) => spaces[side] >= FLOATING_BOOKMARK_MIN);
+      if (spaces[edge] >= minSize) return edge;
+      if (spaces[opposite[edge]] >= minSize) return opposite[edge];
+      const fitting = ['left', 'right', 'top', 'bottom'].filter((side) => spaces[side] >= minSize);
       if (fitting.length) return fitting.sort((a, b) => spaces[b] - spaces[a])[0];
-      return opposite[edge];
+      return ['left', 'right', 'top', 'bottom'].sort((a, b) => spaces[b] - spaces[a])[0] || opposite[edge];
     }
 
     function nearestFloatingEdge(x, y) {
@@ -361,12 +407,14 @@
     function place() {
       const u = env.u(), r = env.panelRect(), st = el.style;
       const floating = !!(env.floating && env.floating());
+      el.dataset.view = env.settings().bookmarksMode || 'card';
       if (floating) {
         const spaces = floatingSpaces(r);
         const storedEdge = env.settings().floatingBookmarksEdge || 'auto';
         const requestedEdge = floatingPreviewEdge || storedEdge;
         const edge = resolveFloatingEdge(requestedEdge === 'auto' ? null : requestedEdge, spaces);
-        const sideSize = Math.max(1, Math.min(FLOATING_BOOKMARK_MAX, spaces[edge]));
+        const preferredSize = env.settings().bookmarksMode === 'strip' ? STRIP_W : FLOATING_BOOKMARK_MAX;
+        const sideSize = Math.max(1, Math.min(preferredSize, spaces[edge]));
         el.dataset.pos = 'floating-' + edge;
         el.dataset.mode = 'floating';
         st.right = 'auto';
@@ -431,7 +479,7 @@
       if (!vis) return;
       place();
       if (s.bookmarks && !data && !loading && !failed) load();
-      const key = [el.dataset.pos, el.dataset.mode, s.bookmarks, !!data].join('|');
+      const key = [el.dataset.pos, el.dataset.mode, s.bookmarksMode, s.bookmarks, !!data].join('|');
       if (key !== lastKey) { lastKey = key; renderContent(); }
       else if (horizontal() && s.bookmarks) fitSoon();
     }

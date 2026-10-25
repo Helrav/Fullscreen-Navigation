@@ -176,6 +176,58 @@ async function cloneBookmarkNode(source, parentId) {
   return created;
 }
 
+async function openFolderBookmarks(folderId, operation, senderTab) {
+  if (!folderId || !api.bookmarks || !api.bookmarks.getSubTree) return { ok: false, reason: 'missing-folder' };
+  const result = await api.bookmarks.getSubTree(String(folderId));
+  const folder = result && result[0];
+  if (!folder || !Array.isArray(folder.children)) return { ok: false, reason: 'missing-folder' };
+
+  const allowedUrl = (value) => /^(https?|ftp|file|about|chrome|edge|brave|vivaldi|opera):/i.test(String(value || ''))
+    && !/^javascript:/i.test(String(value || ''));
+  const urls = folder.children.filter((item) => item && item.url && allowedUrl(item.url)).map((item) => item.url);
+  if (!urls.length) return { ok: true, count: 0 };
+
+  const sourceWindow = senderTab && Number.isInteger(senderTab.windowId) ? senderTab.windowId : undefined;
+  const addTabs = async (windowId, startIndex = 0) => {
+    const opened = [];
+    for (let i = startIndex; i < urls.length; i++) {
+      const tab = await api.tabs.create({ url: urls[i], active: false, ...(Number.isInteger(windowId) ? { windowId } : {}) });
+      if (tab && Number.isInteger(tab.id)) opened.push(tab.id);
+    }
+    return opened;
+  };
+
+  switch (operation) {
+    case 'openFolder': {
+      const opened = await addTabs(sourceWindow);
+      return { ok: true, count: opened.length };
+    }
+    case 'openFolderWindow': {
+      const win = await api.windows.create({ url: urls[0], populate: true });
+      if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
+      const opened = [win.tabs && win.tabs[0] && win.tabs[0].id].filter(Number.isInteger);
+      opened.push(...await addTabs(win.id, 1));
+      return { ok: true, count: opened.length };
+    }
+    case 'openFolderIncognito': {
+      const win = await api.windows.create({ url: urls[0], incognito: true, populate: true });
+      if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
+      const opened = [win.tabs && win.tabs[0] && win.tabs[0].id].filter(Number.isInteger);
+      opened.push(...await addTabs(win.id, 1));
+      return { ok: true, count: opened.length };
+    }
+    case 'openFolderGroup': {
+      if (typeof api.tabs.group !== 'function') return { ok: false, reason: 'tab-groups-unavailable' };
+      const opened = await addTabs(sourceWindow);
+      if (!opened.length) return { ok: false, reason: 'no-tabs-opened' };
+      const groupId = await api.tabs.group({ tabIds: opened });
+      return { ok: true, count: opened.length, groupId };
+    }
+    default:
+      return { ok: false, reason: 'unknown-operation' };
+  }
+}
+
 async function bookmarkAction(message, sender) {
   const bm = api.bookmarks;
   if (!bm) return { ok: false, reason: 'unsupported' };
@@ -188,7 +240,7 @@ async function bookmarkAction(message, sender) {
   try {
     switch (op) {
       case 'capabilities':
-        return { ok: true, splitView: typeof api.tabs.createSplit === 'function' };
+        return { ok: true, splitView: typeof api.tabs.createSplit === 'function', tabGroups: typeof api.tabs.group === 'function' };
 
       case 'openTab':
         if (!url) return { ok: false, reason: 'missing-url' };
@@ -204,6 +256,12 @@ async function bookmarkAction(message, sender) {
         if (!url) return { ok: false, reason: 'missing-url' };
         await api.windows.create({ url, incognito: true });
         return { ok: true };
+
+      case 'openFolder':
+      case 'openFolderWindow':
+      case 'openFolderIncognito':
+      case 'openFolderGroup':
+        return openFolderBookmarks(id, op, senderTab);
 
       case 'openSplit': {
         if (!url || typeof api.tabs.createSplit !== 'function') return { ok: false, reason: 'split-view-unavailable' };
