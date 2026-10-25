@@ -203,14 +203,14 @@ async function openFolderBookmarks(folderId, operation, senderTab) {
       return { ok: true, count: opened.length };
     }
     case 'openFolderWindow': {
-      const win = await api.windows.create({ url: urls[0] });
+      const win = await api.windows.create({ url: urls[0], populate: true });
       if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
       const opened = [win.tabs && win.tabs[0] && win.tabs[0].id].filter(Number.isInteger);
       opened.push(...await addTabs(win.id, 1));
       return { ok: true, count: opened.length };
     }
     case 'openFolderIncognito': {
-      const win = await api.windows.create({ url: urls[0], incognito: true });
+      const win = await api.windows.create({ url: urls[0], incognito: true, populate: true });
       if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
       const opened = [win.tabs && win.tabs[0] && win.tabs[0].id].filter(Number.isInteger);
       opened.push(...await addTabs(win.id, 1));
