@@ -1726,10 +1726,23 @@
       };
       Object.assign(els.snap.style, { display: 'block', right: 'auto', bottom: 'auto', ...styles[edge] });
     };
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+      els.panel.classList.remove('moving', 'dragging-overlay');
+      if (bookmarks) bookmarks.el.classList.remove('dragging-overlay');
+      if (els.dragPreview) els.dragPreview.style.display = 'none';
+      if (els.snap) els.snap.style.display = 'none';
+    };
     const move = (ev) => {
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       if (!moved && Math.hypot(dx, dy) < 3) return;
-      if (!moved && bookmarks) bookmarks.el.classList.add('dragging-overlay');
+      if (!moved) {
+        els.panel.classList.add('moving', 'dragging-overlay');
+        if (bookmarks) bookmarks.el.classList.add('dragging-overlay');
+        if (els.dragPreview) els.dragPreview.style.display = 'grid';
+      }
       moved = true;
       const pw = vw() / u, ph = vh() / u;
       settings.winRect = {
@@ -1737,17 +1750,17 @@
         y: tpClamp(original.y + dy / u, 0, Math.max(0, ph - original.h)),
         w: original.w, h: original.h
       };
+      if (els.dragPreview) {
+        els.dragPreview.style.left = ev.clientX + 'px';
+        els.dragPreview.style.top = ev.clientY + 'px';
+      }
       applyGeometry();
       if (bookmarks) bookmarks.update();
       showSnap(snapEdgeAtCurrent());
     };
     const up = () => {
-      window.removeEventListener('pointermove', move, true);
-      window.removeEventListener('pointerup', up, true);
-      window.removeEventListener('pointercancel', up, true);
-      if (bookmarks) bookmarks.el.classList.remove('dragging-overlay');
       const edge = moved ? snapEdgeAtCurrent() : null;
-      if (els.snap) els.snap.style.display = 'none';
+      cleanup();
       if (!moved) return;
       if (edge) {
         settings.edge = edge;
@@ -1755,7 +1768,10 @@
         settings.winRect = null;
         saveSettings();
         applySettings(true);
-      } else saveSettings();
+      } else {
+        saveSettings();
+        applySettings(true);
+      }
     };
     window.addEventListener('pointermove', move, true);
     window.addEventListener('pointerup', up, true);
@@ -1918,6 +1934,8 @@
     // Create feature modules after their shared elements exist.
     contextMenu = globalThis.TPX.createMenu({
       ui, root, h, vw, vh, u: () => u,
+      tip: showTip,
+      hideTip,
       onOpen: () => clearClose(),
       onClose: () => { if (peek && !pinned && !isBox()) scheduleClose(); }
     });

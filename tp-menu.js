@@ -30,7 +30,14 @@
       for (const it of items) {
         if (it.sep) { box.appendChild(h('div', 'msep')); continue; }
         const row = h('div', 'mi' + (it.disabled ? ' dis' : '') + (it.danger ? ' danger' : '') + (it.sub ? ' has-sub' : ''));
-        if (it.title) row.title = String(it.title);
+        if (it.tooltip && it.tooltip.title && typeof env.tip === 'function') {
+          row.addEventListener('mouseenter', () => {
+            const rect = row.getBoundingClientRect();
+            const side = rect.left + rect.width / 2 < env.vw() / 2 ? 'right' : 'left';
+            env.tip(rect, it.tooltip.title, it.tooltip.detail || '', side);
+          });
+          row.addEventListener('mouseleave', () => { if (env.hideTip) env.hideTip(); });
+        } else if (it.title) row.title = String(it.title);
         if (typeof it.onContext === 'function') {
           row.addEventListener('contextmenu', (e) => {
             e.preventDefault();

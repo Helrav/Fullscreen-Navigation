@@ -19,6 +19,10 @@ globalThis.TPX.CSS = `
 *::-webkit-scrollbar-thumb{background:transparent;border:1px solid transparent;border-radius:999px;background-clip:padding-box}
 *:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
 *:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
+/* Keep every overlay scrollbar visible whenever the pointer is anywhere over Tab Peek. */
+:host(:hover) *{scrollbar-width:auto;scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
+:host(:hover) *::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
+:host(:hover) *::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
 .list,.bmlist,.bmstrip,.menu.scroll,.submenu.scroll{overscroll-behavior:contain}
 .list:hover,.list:focus-within,.bmlist:hover,.bmlist:focus-within,.bmstrip:hover,.bmstrip:focus-within,.menu.scroll:hover,.menu.scroll:focus-within,.submenu.scroll:hover,.submenu.scroll:focus-within{scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
 .list:hover::-webkit-scrollbar-thumb,.list:focus-within::-webkit-scrollbar-thumb,.bmlist:hover::-webkit-scrollbar-thumb,.bmlist:focus-within::-webkit-scrollbar-thumb,.bmstrip:hover::-webkit-scrollbar-thumb,.bmstrip:focus-within::-webkit-scrollbar-thumb,.menu.scroll:hover::-webkit-scrollbar-thumb,.menu.scroll:focus-within::-webkit-scrollbar-thumb,.submenu.scroll:hover::-webkit-scrollbar-thumb,.submenu.scroll:focus-within::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
@@ -329,6 +333,16 @@ globalThis.TPX.CSS = `
 .bm[data-pos=floating-bottom][data-mode=floating] .bmc{border-top:0;border-radius:0 0 14px 14px}
 .bm[data-pos^=floating-][data-mode=floating] .bmhead{cursor:grab;user-select:none;touch-action:none}
 .bm[data-pos^=floating-][data-mode=floating] .bmhead:active{cursor:grabbing}
+/* Floating bookmarks switch between a names card and a compact icon strip. */
+.bm[data-pos=floating-left][data-view=strip] .bmc,.bm[data-pos=floating-right][data-view=strip] .bmc{flex-direction:column;width:44px;height:100%;max-height:100%;align-self:stretch;flex:0 0 44px;margin:0;border:1px solid var(--line);box-shadow:0 6px 20px rgba(0,0,0,.22);border-radius:0}
+.bm[data-pos=floating-right][data-view=strip] .bmc{border-left:0;border-radius:0 14px 14px 0}
+.bm[data-pos=floating-left][data-view=strip] .bmc{border-right:0;border-radius:14px 0 0 14px}
+.bm[data-pos=floating-top][data-view=strip] .bmc,.bm[data-pos=floating-bottom][data-view=strip] .bmc{flex-direction:row;width:100%;height:44px;max-height:44px;align-self:stretch;flex:0 0 44px;margin:0;border:1px solid var(--line);box-shadow:0 6px 20px rgba(0,0,0,.22);border-radius:0}
+.bm[data-pos=floating-top][data-view=strip] .bmc{border-bottom:0;border-radius:14px 14px 0 0}
+.bm[data-pos=floating-bottom][data-view=strip] .bmc{border-top:0;border-radius:0 0 14px 14px}
+.bm[data-pos^=floating-][data-view=strip] .bmstriphead{flex:none;padding:4px 2px;justify-content:center}
+.bm[data-pos^=floating-][data-view=strip] .bmstriphead .bmmode{max-width:100%;margin:2px;padding:2px;font-size:10px;white-space:nowrap}
+.bm[data-pos=floating-top][data-view=strip] .bmstrip,.bm[data-pos=floating-bottom][data-view=strip] .bmstrip{flex-direction:row;align-items:center;min-width:0;width:auto;min-height:0;height:auto;overflow-x:auto;overflow-y:hidden;padding:0 4px;scrollbar-width:auto}
 .bmempty{padding:10px 12px;color:var(--muted)}
 .bmhead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 12px;border-bottom:1px solid var(--line);font-weight:600}
 .bmmode{flex:none}
