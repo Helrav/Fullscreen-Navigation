@@ -1144,6 +1144,7 @@
   }
 
   function promptText(title, value, callback) {
+    clearClose();
     closePrompt();
     const backdrop = h('div', 'backdrop');
     const prompt = h('div', 'prompt');
@@ -1181,6 +1182,101 @@
     backdrop.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
     backdrop.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
     requestAnimationFrame(() => { input.focus(); input.select(); });
+  }
+
+
+  function promptBookmarkEditor(title, initialName, initialUrl, withUrl, callback) {
+    closePrompt();
+    clearClose();
+    const backdrop = h('div', 'backdrop');
+    const prompt = h('div', 'prompt bookmark-prompt');
+    const heading = h('div', 'ptitle', title);
+    const nameLabel = h('label', 'bookmark-field', 'Name');
+    const nameInput = h('input', 'search');
+    nameInput.type = 'text';
+    nameInput.value = initialName || '';
+    nameInput.maxLength = 255;
+    nameLabel.appendChild(nameInput);
+    prompt.append(heading, nameLabel);
+    let urlInput = null;
+    if (withUrl) {
+      const urlLabel = h('label', 'bookmark-field', 'URL');
+      urlInput = h('input', 'search');
+      urlInput.type = 'url';
+      urlInput.value = initialUrl || '';
+      urlInput.maxLength = 4096;
+      urlLabel.appendChild(urlInput);
+      prompt.appendChild(urlLabel);
+    }
+    const row = h('div', 'prow');
+    const cancel = textBtn('tbtn', 'Cancel');
+    const save = textBtn('tbtn ok', 'Save');
+    row.append(cancel, save);
+    prompt.appendChild(row);
+    ui.append(backdrop, prompt);
+    renamePrompt = { backdrop, prompt, input: nameInput };
+    const close = () => closePrompt();
+    const submit = () => {
+      const url = urlInput ? urlInput.value.trim() : undefined;
+      if (withUrl && !url) { urlInput.focus(); return; }
+      const values = { title: nameInput.value.trim() };
+      if (withUrl) values.url = url;
+      closePrompt();
+      callback(values);
+    };
+    cancel.addEventListener('click', close);
+    save.addEventListener('click', submit);
+    for (const input of [nameInput, urlInput].filter(Boolean)) {
+      input.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+      });
+    }
+    backdrop.addEventListener('pointerdown', (e) => {
+      if (e.target === backdrop) { e.preventDefault(); e.stopPropagation(); }
+    });
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) { e.preventDefault(); e.stopPropagation(); close(); }
+    });
+    backdrop.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    backdrop.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
+    requestAnimationFrame(() => { nameInput.focus(); nameInput.select(); });
+  }
+
+  function openBookmarkEditor(node) {
+    if (!node) return;
+    promptBookmarkEditor(
+      node.url ? 'Edit bookmark' : 'Edit folder',
+      node.title || '',
+      node.url || '',
+      !!node.url,
+      async (values) => {
+        const message = { type: 'bookmarkAction', op: 'update', id: node.id, title: values.title };
+        if (typeof values.url === 'string') message.url = values.url;
+        const result = await send(message);
+        if (result && result.ok && bookmarks) bookmarks.refresh();
+      }
+    );
+  }
+
+  function addBookmarkFromPanel(kind, parentId) {
+    if (kind === 'page') {
+      const currentUrl = /^(https?:|file:)/i.test(location.href) ? location.href : '';
+      promptBookmarkEditor('Add page', document.title || '', currentUrl, true, async (values) => {
+        const result = await send({
+          type: 'bookmarkAction', op: 'createPage', parentId,
+          title: values.title, url: values.url
+        });
+        if (result && result.ok && bookmarks) bookmarks.refresh();
+      });
+      return;
+    }
+    promptText('Add folder', '', async (name) => {
+      if (!name) return;
+      const result = await send({ type: 'bookmarkAction', op: 'createFolder', parentId, title: name });
+      if (result && result.ok && bookmarks) bookmarks.refresh();
+    });
   }
 
   // ---------- push mode ----------
@@ -1357,6 +1453,7 @@
   function update(instant) {
     if (dead || !els.panel) return;
     if (!allowed()) peek = false;
+    const wasShown = shown;
     const vis = wantVisible();
     if (vis && !shown) { needCenter = true; measure(); placeHint(); }
     shown = vis;
@@ -1372,7 +1469,14 @@
     const needPort = vis && document.visibilityState === 'visible';
     if (needPort && !port) { connect(); refreshTabs(); }
     else if (!needPort && port) disconnect();
-    if (bookmarks) bookmarks.update();
+    if (bookmarks) {
+      bookmarks.update();
+      // Do not show the drawer at the panel's off-screen starting coordinates.
+      // It becomes visible again as soon as the panel finishes sliding in.
+      if (vis && !wasShown && !isBox() && !els.panel.classList.contains('no-anim')) {
+        bookmarks.el.classList.add('pending-place');
+      }
+    }
     syncPush(!instant);
   }
 
@@ -1737,7 +1841,14 @@
       open: openBookmark,
       tip: showTip,
       hideTip,
-      hoverable
+      hoverable,
+      editBookmark: openBookmarkEditor,
+      addBookmark: addBookmarkFromPanel
+    });
+    els.panel.addEventListener('transitionend', (e) => {
+      if (e.target !== els.panel || !['transform', 'opacity'].includes(e.propertyName) || !bookmarks) return;
+      bookmarks.el.classList.remove('pending-place');
+      if (shown) bookmarks.update();
     });
 
     // Avoid page keyboard listeners taking over focus when the address/search field is in use.

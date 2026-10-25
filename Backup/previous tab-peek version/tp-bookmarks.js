@@ -16,16 +16,25 @@
     // The bookmarks drawer is attached directly to the overlay. It is opened
     // by the existing Bookmarks toolbar icon; there is no separate chevron tab.
     el.appendChild(content);
+    content.addEventListener('contextmenu', (e) => {
+      const target = e.target;
+      const blankSurface = target === content || (target && target.classList
+        && ['bmlist', 'bmstrip', 'bmbar', 'bmrow', 'bmempty'].some((cls) => target.classList.contains(cls)));
+      if (blankSurface) showContextMenu(e, null);
+    });
     ui.appendChild(el);
     env.hoverable(el);
 
     const horizontal = () => el.dataset.pos === 'below' || el.dataset.pos === 'above';
+    const label = (n) => n && typeof n.title === 'string' && n.title.trim()
+      ? n.title
+      : (n && n.url ? 'Untitled bookmark' : 'Folder');
 
     // ----- pieces -----
     function icon(n) {
       const s = h('span', 'fav');
       const letter = () => {
-        s.textContent = ((n.title || '?').trim().charAt(0) || '•').toUpperCase();
+        s.textContent = (label(n).trim().charAt(0) || '•').toUpperCase();
         s.classList.add('letter');
       };
       if (!n.url) {
@@ -41,7 +50,7 @@
         return s;
       }
       if (X.favicons) {
-        X.favicons.mount(s, n.url, '', n.title || n.url, { serviceFirst: true });
+        X.favicons.mount(s, n.url, '', label(n), { serviceFirst: true });
       } else letter();
       return s;
     }
@@ -55,13 +64,78 @@
     function toItems(nodes) {
       if (!nodes.length) return [{ label: '(empty)', disabled: true }];
       return nodes.map((n) => (n.children
-        ? { label: n.title, icon: () => icon(n), sub: toItems(n.children) }
-        : { label: n.title, icon: () => icon(n), action: () => openBm(n, null) }));
+        ? { label: label(n), icon: () => icon(n), sub: toItems(n.children), onContext: (e) => showContextMenu(e, n) }
+        : { label: label(n), icon: () => icon(n), action: () => openBm(n, null), onContext: (e) => showContextMenu(e, n) }));
+    }
+
+
+    async function showContextMenu(e, n) {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetParentId = n && n.children
+        ? n.id
+        : (n && n.parentId != null ? n.parentId : (data && data.barId));
+      const targetId = n && n.id;
+      const isPage = !!(n && n.url);
+      const [clip, capabilities] = await Promise.all([
+        env.send({ type: 'bookmarkAction', op: 'clipboardGet' }),
+        env.send({ type: 'bookmarkAction', op: 'capabilities' })
+      ]);
+      const run = (op, values = {}, refreshAfter = false) => async () => {
+        const result = await env.send({ type: 'bookmarkAction', op, ...values });
+        if (result && result.ok && refreshAfter) {
+          failed = false;
+          data = null;
+          lastKey = '';
+          load();
+        }
+      };
+      const action = (labelText, op, values, enabled = true, refreshAfter = false) => ({
+        label: labelText,
+        disabled: !enabled,
+        action: run(op, values, refreshAfter)
+      });
+      const edit = {
+        label: 'Edit...',
+        disabled: !n || !env.editBookmark,
+        action: () => env.editBookmark && env.editBookmark(n)
+      };
+      const addPage = {
+        label: 'Add page...',
+        disabled: !targetParentId || !env.addBookmark,
+        action: () => env.addBookmark && env.addBookmark('page', String(targetParentId))
+      };
+      const addFolder = {
+        label: 'Add folder...',
+        disabled: !targetParentId || !env.addBookmark,
+        action: () => env.addBookmark && env.addBookmark('folder', String(targetParentId))
+      };
+      const items = [
+        action('Open in new tab', 'openTab', { url: n && n.url }, isPage),
+        action('Open in new window', 'openWindow', { url: n && n.url }, isPage),
+        action('Open in split view', 'openSplit', { url: n && n.url }, isPage && !!(capabilities && capabilities.splitView)),
+        action('Open in Incognito window', 'openIncognito', { url: n && n.url }, isPage),
+        { sep: true },
+        edit,
+        { sep: true },
+        action('Cut', 'clipboardSet', { id: targetId, cut: true }, !!targetId),
+        action('Copy', 'clipboardSet', { id: targetId, cut: false }, !!targetId),
+        action('Paste', 'clipboardPaste', { parentId: targetParentId }, !!(targetParentId && clip && clip.available), true),
+        { sep: true },
+        action('Delete', 'delete', { id: targetId }, !!targetId, true),
+        { sep: true },
+        addPage,
+        addFolder,
+        { sep: true },
+        { label: 'Open bookmarks manager', action: run('openManager') },
+        { label: 'Show bookmark bar', action: run('showBarSettings') }
+      ];
+      env.menu.show(items, e.clientX, e.clientY);
     }
 
     function allTop() {
       const list = data.bar.slice();
-      if (data.other.length) list.push({ id: 'other', title: 'Other bookmarks', children: data.other });
+      if (data.other.length) list.push({ id: data.otherId || 'other', title: 'Other bookmarks', children: data.other });
       return list;
     }
 
@@ -73,8 +147,9 @@
       const mk = (n) => {
         const b = h('button', 'bmitem');
         b.type = 'button';
-        b.append(icon(n), h('span', 'bmt', n.title));
+        b.append(icon(n), h('span', 'bmt', label(n)));
         b.addEventListener('mousedown', (e) => e.preventDefault());
+        b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.addEventListener('click', () => env.menu.showBeside(toItems(n.children), b.getBoundingClientRect(), el.dataset.pos === 'above' ? 'above' : 'below'));
         } else {
@@ -131,8 +206,9 @@
         b.type = 'button';
         b.appendChild(icon(n));
         b.addEventListener('mousedown', (e) => e.preventDefault());
-        b.addEventListener('mouseenter', () => env.tip(b.getBoundingClientRect(), n.title, n.url || '', side));
+        b.addEventListener('mouseenter', () => env.tip(b.getBoundingClientRect(), label(n), n.url || '', side));
         b.addEventListener('mouseleave', () => env.hideTip());
+        b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.addEventListener('click', () => { env.hideTip(); env.menu.showBeside(toItems(n.children), b.getBoundingClientRect(), side); });
         } else {
@@ -164,19 +240,21 @@
             const c = env.chevron();
             c.classList.add('bmchev');
             if (isOpen) c.classList.add('o');
-            row.append(c, icon(n), h('span', 'bmt', n.title));
+            row.append(c, icon(n), h('span', 'bmt', label(n)));
             row.addEventListener('click', () => {
               if (openIds.has(n.id)) openIds.delete(n.id); else openIds.add(n.id);
               renderContent();
             });
+            row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
             list.appendChild(row);
             if (isOpen) {
               if (n.children.length) rows(n.children, depth + 1);
               else { const e = h('div', 'bmr bmempty', '(empty)'); e.style.paddingLeft = (8 + (depth + 1) * 14 + 16) + 'px'; list.appendChild(e); }
             }
           } else {
-            row.append(h('span', 'bmsp'), icon(n), h('span', 'bmt', n.title));
+            row.append(h('span', 'bmsp'), icon(n), h('span', 'bmt', label(n)));
             row.addEventListener('click', (e) => openBm(n, e));
+            row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
             row.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
             list.appendChild(row);
           }

@@ -30,6 +30,13 @@
       for (const it of items) {
         if (it.sep) { box.appendChild(h('div', 'msep')); continue; }
         const row = h('div', 'mi' + (it.disabled ? ' dis' : '') + (it.danger ? ' danger' : '') + (it.sub ? ' has-sub' : ''));
+        if (typeof it.onContext === 'function') {
+          row.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            it.onContext(e);
+          });
+        }
         const lead = h('span', 'mlead');
         if (it.dot) {
           const d = h('span', 'mdot');

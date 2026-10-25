@@ -147,8 +147,8 @@ async function bookmarksTree() {
   const root = (await api.bookmarks.getTree())[0];
   if (!root) return { barId: null, bar: [], other: [] };
   const mapNode = (node) => node.url
-    ? { id: node.id, title: node.title || node.url, url: node.url }
-    : { id: node.id, title: node.title || 'Folder', children: (node.children || []).map(mapNode) };
+    ? { id: node.id, parentId: node.parentId, title: typeof node.title === 'string' ? node.title : '', url: node.url }
+    : { id: node.id, parentId: node.parentId, title: node.title || 'Folder', children: (node.children || []).map(mapNode) };
   let bar = null;
   let other = null;
   for (const child of root.children || []) {
@@ -158,9 +158,170 @@ async function bookmarksTree() {
   if (!bar) bar = (root.children || [])[0] || null;
   return {
     barId: bar ? bar.id : null,
+    otherId: other ? other.id : null,
     bar: bar ? (bar.children || []).map(mapNode) : [],
     other: other ? (other.children || []).map(mapNode) : []
   };
+}
+
+
+async function cloneBookmarkNode(source, parentId) {
+  const details = {
+    parentId: String(parentId),
+    title: typeof source.title === 'string' ? source.title : ''
+  };
+  if (source.url) details.url = source.url;
+  const created = await api.bookmarks.create(details);
+  for (const child of source.children || []) await cloneBookmarkNode(child, created.id);
+  return created;
+}
+
+async function bookmarkAction(message, sender) {
+  const bm = api.bookmarks;
+  if (!bm) return { ok: false, reason: 'unsupported' };
+  const op = String(message && message.op || '');
+  const id = message && message.id != null ? String(message.id) : '';
+  const url = String(message && message.url || '');
+  const senderTab = sender && sender.tab;
+  const local = api.storage && api.storage.local;
+
+  try {
+    switch (op) {
+      case 'capabilities':
+        return { ok: true, splitView: typeof api.tabs.createSplit === 'function' };
+
+      case 'openTab':
+        if (!url) return { ok: false, reason: 'missing-url' };
+        await api.tabs.create({ url, ...(senderTab && Number.isInteger(senderTab.windowId) ? { windowId: senderTab.windowId } : {}) });
+        return { ok: true };
+
+      case 'openWindow':
+        if (!url) return { ok: false, reason: 'missing-url' };
+        await api.windows.create({ url });
+        return { ok: true };
+
+      case 'openIncognito':
+        if (!url) return { ok: false, reason: 'missing-url' };
+        await api.windows.create({ url, incognito: true });
+        return { ok: true };
+
+      case 'openSplit': {
+        if (!url || typeof api.tabs.createSplit !== 'function') return { ok: false, reason: 'split-view-unavailable' };
+        const current = senderTab && Number.isInteger(senderTab.id)
+          ? await api.tabs.get(senderTab.id).catch(() => null)
+          : (await api.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []))[0];
+        if (!current || current.splitViewId >= 0) return { ok: false, reason: 'split-view-unavailable' };
+        let created = null;
+        try {
+          created = await api.tabs.create({
+            url,
+            windowId: current.windowId,
+            index: current.index + 1,
+            pinned: !!current.pinned,
+            active: true
+          });
+          if (Number.isInteger(current.groupId) && current.groupId >= 0) {
+            await api.tabs.group({ tabIds: [created.id], groupId: current.groupId });
+            const anchor = await api.tabs.get(current.id);
+            await api.tabs.move(created.id, { windowId: current.windowId, index: anchor.index + 1 });
+          }
+          await api.tabs.createSplit([current.id, created.id]);
+          return { ok: true };
+        } catch (_) {
+          if (created && Number.isInteger(created.id)) await api.tabs.remove(created.id).catch(() => {});
+          return { ok: false, reason: 'split-view-unavailable' };
+        }
+      }
+
+      case 'update':
+        if (!id) return { ok: false, reason: 'missing-id' };
+        {
+          const changes = { title: String(message.title == null ? '' : message.title) };
+          if (typeof message.url === 'string') changes.url = message.url;
+          await bm.update(id, changes);
+        }
+        scheduleBookmarks();
+        return { ok: true };
+
+      case 'createPage':
+      case 'createFolder': {
+        const tree = await bookmarksTree();
+        const parentId = message.parentId != null ? String(message.parentId) : tree && tree.barId;
+        if (!parentId) return { ok: false, reason: 'missing-parent' };
+        const details = { parentId, title: String(message.title == null ? '' : message.title) };
+        if (op === 'createPage') {
+          if (!url) return { ok: false, reason: 'missing-url' };
+          details.url = url;
+        }
+        await bm.create(details);
+        scheduleBookmarks();
+        return { ok: true };
+      }
+
+      case 'delete':
+        if (!id) return { ok: false, reason: 'missing-id' };
+        {
+          const found = await bm.getSubTree(id);
+          if (!found || !found[0]) return { ok: false, reason: 'missing-bookmark' };
+          if (found[0].children) await bm.removeTree(id);
+          else await bm.remove(id);
+        }
+        scheduleBookmarks();
+        return { ok: true };
+
+      case 'clipboardGet': {
+        const stored = local ? await local.get('tabPeekBookmarkClipboard') : {};
+        const clip = stored && stored.tabPeekBookmarkClipboard;
+        return { ok: true, available: !!(clip && clip.item && clip.item.id), cut: !!(clip && clip.cut) };
+      }
+
+      case 'clipboardSet': {
+        if (!local || !id) return { ok: false, reason: 'unsupported' };
+        const found = await bm.getSubTree(id);
+        if (!found || !found[0]) return { ok: false, reason: 'missing-bookmark' };
+        await local.set({ tabPeekBookmarkClipboard: { item: found[0], cut: !!message.cut } });
+        return { ok: true };
+      }
+
+      case 'clipboardPaste': {
+        if (!local || !message.parentId) return { ok: false, reason: 'missing-parent' };
+        const stored = await local.get('tabPeekBookmarkClipboard');
+        const clip = stored && stored.tabPeekBookmarkClipboard;
+        if (!clip || !clip.item || !clip.item.id) return { ok: false, reason: 'clipboard-empty' };
+        const destination = String(message.parentId);
+        const contains = (node, targetId) => String(node.id) === String(targetId)
+          || (node.children || []).some((child) => contains(child, targetId));
+        if (clip.cut && contains(clip.item, destination)) return { ok: false, reason: 'paste-into-self' };
+        await cloneBookmarkNode(clip.item, destination);
+        if (clip.cut) {
+          if (clip.item.children) await bm.removeTree(String(clip.item.id));
+          else await bm.remove(String(clip.item.id));
+          await local.remove('tabPeekBookmarkClipboard');
+        }
+        scheduleBookmarks();
+        return { ok: true };
+      }
+
+      case 'openManager': {
+        const isFirefox = api.runtime.getURL('').startsWith('moz-extension:');
+        await api.tabs.create({ url: isFirefox ? 'about:bookmarks' : 'chrome://bookmarks/' });
+        return { ok: true };
+      }
+
+      case 'showBarSettings': {
+        // WebExtensions do not expose a cross-browser API to toggle the native
+        // bookmarks bar. Open its browser settings instead of silently doing nothing.
+        const isFirefox = api.runtime.getURL('').startsWith('moz-extension:');
+        await api.tabs.create({ url: isFirefox ? 'about:preferences#general' : 'chrome://settings/appearance' });
+        return { ok: true, settingsOpened: true };
+      }
+
+      default:
+        return { ok: false, reason: 'unknown-operation' };
+    }
+  } catch (_) {
+    return { ok: false, reason: 'operation-failed' };
+  }
 }
 
 async function bookmarkTabs(ids) {
@@ -450,6 +611,8 @@ async function handle(message, sender) {
       return moveTabs(ids, message.target);
     case 'bmTree':
       return bookmarksTree();
+    case 'bookmarkAction':
+      return bookmarkAction(message, sender);
     default:
       return null;
   }
