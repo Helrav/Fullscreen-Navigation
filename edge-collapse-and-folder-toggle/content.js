@@ -1548,7 +1548,7 @@
     shown = vis;
     els.panel.classList.toggle('hidden', !vis);
     syncOverlayCollapsedState();
-    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks && !isOverlayCollapsed()));
+    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks));
     if (!(vis && isBox() && settings.bookmarks)) {
       for (const cls of ['bookmarks-left', 'bookmarks-top', 'bookmarks-bottom']) els.panel.classList.remove(cls);
     }

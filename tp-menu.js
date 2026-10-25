@@ -115,7 +115,10 @@
 
     // A click anywhere in the overlay that is not on the menu closes it.
     root.addEventListener('mousedown', (e) => {
-      if (open && !(e.target.closest && e.target.closest('.menu'))) hide();
+      const target = e.target;
+      const insideMenu = target && target.closest && target.closest('.menu');
+      const folderTrigger = target && target.closest && target.closest('.bm-folder-menu-trigger');
+      if (open && !insideMenu && !folderTrigger) hide();
     }, true);
 
     return { show, showBeside, hide, isOpen: () => open };

@@ -136,17 +136,6 @@ globalThis.TPX.CSS = `
 .btn svg{width:17px;height:17px;fill:currentColor}
 .overlay-toggle{cursor:pointer;touch-action:manipulation}
 .overlay-toggle svg{width:19px;height:19px}
-.panel.overlay-collapsed .top{flex:1 1 auto;min-width:0;min-height:0;overflow:hidden}
-.panel.overlay-collapsed .head{display:flex;flex:1 1 auto;align-items:center;justify-content:center;flex-wrap:nowrap;width:100%;height:100%;min-width:0;min-height:0;padding:0;gap:0;overflow:hidden}
-.panel.overlay-collapsed .head>:not(.searchrow),
-.panel.overlay-collapsed .searchrow>:not(.overlay-toggle),
-.panel.overlay-collapsed .tools,
-.panel.overlay-collapsed .list,
-.panel.overlay-collapsed .edge-tools,
-.panel.overlay-collapsed .sizebadge{display:none!important}
-.panel.overlay-collapsed .searchrow{display:flex;flex:0 0 auto;align-items:center;justify-content:center;gap:0;width:auto;min-width:0;min-height:0}
-.panel.overlay-collapsed .overlay-toggle{display:grid;flex:none;width:36px;height:36px;place-items:center;padding:0}
-.panel.overlay-collapsed~.bm{display:none!important}
 .pin svg{transition:transform .15s}
 .pin[aria-pressed=false] svg{transform:rotate(45deg)}
 .pin[aria-pressed=true]{color:var(--accent);background:transparent}

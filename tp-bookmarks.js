@@ -10,6 +10,7 @@
 
     let data = null, loading = false, failed = false, lastKey = '', fitRaf = 0;
     const openIds = new Set();
+    let openFolderMenuId = null;
 
     const el = h('div', 'bm hidden');
     const content = h('div', 'bmc');
@@ -117,6 +118,18 @@
         : { label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n), action: () => openBm(n, null), onContext: (e) => showContextMenu(e, n) }));
     }
 
+    function toggleFolderMenu(n, button, side) {
+      const id = String(n.id);
+      if (env.menu.isOpen() && openFolderMenuId === id) {
+        env.menu.hide();
+        openFolderMenuId = null;
+        return;
+      }
+      openFolderMenuId = id;
+      env.hideTip();
+      env.menu.showBeside(toItems(n.children), button.getBoundingClientRect(), side);
+    }
+
 
     async function showContextMenu(e, n) {
       e.preventDefault();
@@ -211,7 +224,8 @@
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
-          b.addEventListener('click', () => env.menu.showBeside(toItems(n.children), b.getBoundingClientRect(), el.dataset.pos === 'above' ? 'above' : 'below'));
+          b.classList.add('bm-folder-menu-trigger');
+          b.addEventListener('click', () => toggleFolderMenu(n, b, el.dataset.pos === 'above' ? 'above' : 'below'));
         } else {
           b.addEventListener('click', (e) => openBm(n, e));
           b.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
@@ -279,7 +293,8 @@
         b.addEventListener('mouseleave', () => env.hideTip());
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
-          b.addEventListener('click', () => { env.hideTip(); env.menu.showBeside(toItems(n.children), b.getBoundingClientRect(), side); });
+          b.classList.add('bm-folder-menu-trigger');
+          b.addEventListener('click', () => toggleFolderMenu(n, b, side));
         } else {
           b.addEventListener('click', (e) => openBm(n, e));
           b.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
@@ -309,7 +324,9 @@
             c.classList.add('bmchev');
             if (isOpen) c.classList.add('o');
             row.append(c, icon(n), h('span', 'bmt', label(n)));
-            row.addEventListener('click', () => {
+            row.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
               if (openIds.has(n.id)) openIds.delete(n.id);
               else openIds.add(n.id);
               renderContent();
