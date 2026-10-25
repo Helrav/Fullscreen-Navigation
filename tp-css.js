@@ -13,10 +13,10 @@ globalThis.TPX.CSS = `
 /* Minimal scrollbars: no track; a wider thumb appears over the scroller and remains easy to grab. */
 *{scrollbar-width:auto;scrollbar-color:transparent transparent}
 *:hover{scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
-*::-webkit-scrollbar{width:10px;height:10px;background:transparent}
+*::-webkit-scrollbar{width:12px;height:12px;background:transparent}
 *::-webkit-scrollbar-track{background:transparent;border:0}
 *::-webkit-scrollbar-corner{background:transparent}
-*::-webkit-scrollbar-thumb{background:transparent;border:2px solid transparent;border-radius:999px;background-clip:padding-box}
+*::-webkit-scrollbar-thumb{background:transparent;border:1px solid transparent;border-radius:999px;background-clip:padding-box}
 *:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
 *:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
 .list,.bmlist,.bmstrip,.menu.scroll,.submenu.scroll{overscroll-behavior:contain}
@@ -48,8 +48,10 @@ globalThis.TPX.CSS = `
 .panel[data-style=docked][data-edge=top]{left:0;right:var(--sbv,0px);top:0;height:var(--h)}
 .panel[data-style=docked][data-edge=bottom]{left:0;right:var(--sbv,0px);bottom:var(--sbh,0px);height:var(--h)}
 .panel[data-style=windowed]{left:var(--bx);top:var(--by);width:var(--bw);height:var(--bh);border-radius:14px}
-.panel[data-style=windowed].with-floating-bookmarks:not(.bookmarks-left){border-top-right-radius:0;border-bottom-right-radius:0}
+.panel[data-style=windowed].with-floating-bookmarks:not(.bookmarks-left):not(.bookmarks-top):not(.bookmarks-bottom){border-top-right-radius:0;border-bottom-right-radius:0}
 .panel[data-style=windowed].with-floating-bookmarks.bookmarks-left{border-top-left-radius:0;border-bottom-left-radius:0}
+.panel[data-style=windowed].with-floating-bookmarks.bookmarks-top{border-top-left-radius:0;border-top-right-radius:0}
+.panel[data-style=windowed].with-floating-bookmarks.bookmarks-bottom{border-bottom-left-radius:0;border-bottom-right-radius:0}
 .panel.moving{transition:none}
 .panel.dragging-overlay{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
 
@@ -164,7 +166,7 @@ globalThis.TPX.CSS = `
 .compact .tbtn{padding:0 4px;font-size:11px}
 
 /* ---------- list ---------- */
-.list{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:2px;padding:6px;overflow:auto;scrollbar-width:thin}
+.list{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:2px;padding:6px;overflow:auto;scrollbar-width:auto}
 .panel[data-dir=h] .list{flex-direction:row;align-items:stretch;overflow-y:hidden;padding:0}
 .panel[data-style=windowed][data-dir=v] .list{flex-direction:column;overflow:auto}
 .win{display:flex;flex-direction:column;gap:2px;border-radius:8px}
@@ -307,8 +309,8 @@ globalThis.TPX.CSS = `
 .bm.pending-place{visibility:hidden}
 .bm.dragging-overlay{visibility:hidden!important}
 /* Bookmarks are a drawer attached directly to the overlay, with no arrow tab. */
-.bm[data-pos=right],.bm[data-pos=left],.bm[data-pos^=floating-]{flex-direction:row}
-.bm[data-pos=below],.bm[data-pos=above]{flex-direction:column}
+.bm[data-pos=right],.bm[data-pos=left],.bm[data-pos=floating-left],.bm[data-pos=floating-right]{flex-direction:row}
+.bm[data-pos=below],.bm[data-pos=above],.bm[data-pos=floating-top],.bm[data-pos=floating-bottom]{flex-direction:column}
 .bm[data-pos^=floating-]{align-items:stretch}
 .bm.open .bmc{box-shadow:none;border:1px solid var(--line)}
 .bm:not(.open) .bmc{display:none}
@@ -319,14 +321,19 @@ globalThis.TPX.CSS = `
 .bm[data-pos=right][data-mode=card] .bmc{border-radius:0 8px 8px 0}
 .bm[data-pos=left][data-mode=card] .bmc{border-radius:8px 0 0 8px}
 .bm[data-mode=bar] .bmc{width:100%;height:36px;align-self:stretch;box-shadow:none;border:1px solid var(--line)}
-.bm[data-pos^=floating-][data-mode=floating] .bmc{flex-direction:column;width:var(--bm-floating-width,250px);height:100%;max-height:100%;align-self:stretch;flex:0 1 var(--bm-floating-width,250px);margin:0;border:1px solid var(--line);box-shadow:0 6px 20px rgba(0,0,0,.22);border-radius:0}
+.bm[data-pos=floating-left][data-mode=floating] .bmc,.bm[data-pos=floating-right][data-mode=floating] .bmc{flex-direction:column;width:var(--bm-floating-width,250px);height:100%;max-height:100%;align-self:stretch;flex:0 1 var(--bm-floating-width,250px);margin:0;border:1px solid var(--line);box-shadow:0 6px 20px rgba(0,0,0,.22);border-radius:0}
 .bm[data-pos=floating-right][data-mode=floating] .bmc{border-left:0;border-radius:0 14px 14px 0}
 .bm[data-pos=floating-left][data-mode=floating] .bmc{border-right:0;border-radius:14px 0 0 14px}
+.bm[data-pos=floating-top][data-mode=floating] .bmc,.bm[data-pos=floating-bottom][data-mode=floating] .bmc{flex-direction:column;width:100%;height:100%;max-height:100%;align-self:stretch;flex:1 1 auto;margin:0;border:1px solid var(--line);box-shadow:0 6px 20px rgba(0,0,0,.22);border-radius:0}
+.bm[data-pos=floating-top][data-mode=floating] .bmc{border-bottom:0;border-radius:14px 14px 0 0}
+.bm[data-pos=floating-bottom][data-mode=floating] .bmc{border-top:0;border-radius:0 0 14px 14px}
+.bm[data-pos^=floating-][data-mode=floating] .bmhead{cursor:grab;user-select:none;touch-action:none}
+.bm[data-pos^=floating-][data-mode=floating] .bmhead:active{cursor:grabbing}
 .bmempty{padding:10px 12px;color:var(--muted)}
 .bmhead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 12px;border-bottom:1px solid var(--line);font-weight:600}
 .bmmode{flex:none}
 .bm[data-mode=strip] .bmmode{margin:6px 4px;padding:0}
-.bmlist{flex:1;min-height:0;overflow:auto;padding:4px;scrollbar-width:thin}
+.bmlist{flex:1;min-height:0;overflow:auto;padding:4px;scrollbar-width:auto}
 .bmr{display:flex;align-items:center;gap:8px;min-height:28px;padding:3px 8px;border-radius:6px;cursor:pointer}
 .bmr:hover{background:var(--hover)}
 .bmr.bmempty{cursor:default;color:var(--muted);padding-top:3px;padding-bottom:3px}
@@ -334,7 +341,7 @@ globalThis.TPX.CSS = `
 .bmchev{flex:none;width:16px;height:16px;fill:currentColor;color:var(--muted);transform:none}
 .bmchev.o{transform:rotate(90deg)}
 .bmsp{flex:none;width:16px}
-.bmstrip{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;overflow-y:auto}
+.bmstrip{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;overflow-y:auto;scrollbar-width:auto}
 .bmicon{flex:none;width:34px;height:32px;display:grid;place-items:center;padding:0;border:0;border-radius:7px;background:transparent;cursor:pointer}
 .bmicon:hover{background:var(--hover)}
 .bmbar{display:flex;align-items:center;width:100%;height:100%;padding:0 4px;gap:2px}

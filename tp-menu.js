@@ -30,6 +30,7 @@
       for (const it of items) {
         if (it.sep) { box.appendChild(h('div', 'msep')); continue; }
         const row = h('div', 'mi' + (it.disabled ? ' dis' : '') + (it.danger ? ' danger' : '') + (it.sub ? ' has-sub' : ''));
+        if (it.title) row.title = String(it.title);
         if (typeof it.onContext === 'function') {
           row.addEventListener('contextmenu', (e) => {
             e.preventDefault();

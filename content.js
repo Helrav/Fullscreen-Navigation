@@ -1486,7 +1486,9 @@
     shown = vis;
     els.panel.classList.toggle('hidden', !vis);
     els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks));
-    if (!(vis && isBox() && settings.bookmarks)) els.panel.classList.remove('bookmarks-left');
+    if (!(vis && isBox() && settings.bookmarks)) {
+      for (const cls of ['bookmarks-left', 'bookmarks-top', 'bookmarks-bottom']) els.panel.classList.remove(cls);
+    }
     updateResizeBuffer();
     if (ui) ui.dataset.theme = settings.theme;
     els.pin.setAttribute('aria-pressed', String(pinned));
@@ -1581,6 +1583,8 @@
 
   function startDockDrag(e) {
     if (e.button !== 0) return;
+    // The grip should move a floating window without replacing its saved dimensions.
+    if (isBox()) { startFloatingMove(e, true); return; }
     e.preventDefault();
     e.stopPropagation();
     clearClose();
@@ -1691,14 +1695,37 @@
     window.addEventListener('pointercancel', up, true);
   }
 
-  function startFloatingMove(e) {
-    if (!isBox() || e.button !== 0 || (e.target.closest && e.target.closest('button,input,.searchwrap,.rz'))) return;
+  function startFloatingMove(e, fromGrip = false) {
+    if (!isBox() || e.button !== 0 || (e.target.closest && e.target.closest('button,input,.searchwrap,.rz') && !(fromGrip && e.target.closest('.grip')))) return;
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX, startY = e.clientY;
     const rect = els.panel.getBoundingClientRect();
     const original = { x: rect.left / u, y: rect.top / u, w: rect.width / u, h: rect.height / u };
     let moved = false;
+
+    const snapEdgeAtCurrent = () => {
+      const r = els.panel.getBoundingClientRect();
+      const gaps = [
+        ['left', Math.max(0, r.left)],
+        ['right', Math.max(0, vw() - r.right)],
+        ['top', Math.max(0, r.top)],
+        ['bottom', Math.max(0, vh() - r.bottom)]
+      ].sort((a, b) => a[1] - b[1]);
+      return gaps[0][1] <= Math.max(36, Math.round(36 * u)) ? gaps[0][0] : null;
+    };
+    const showSnap = (edge) => {
+      if (!els.snap) return;
+      if (!edge) { els.snap.style.display = 'none'; return; }
+      const w = settings.panelWidth * u, hh = settings.barHeight * u;
+      const styles = {
+        left: { left: '0px', top: '0px', width: w + 'px', height: '100%' },
+        right: { right: '0px', top: '0px', left: 'auto', width: w + 'px', height: '100%' },
+        top: { left: '0px', top: '0px', width: '100%', height: hh + 'px' },
+        bottom: { left: '0px', bottom: '0px', top: 'auto', width: '100%', height: hh + 'px' }
+      };
+      Object.assign(els.snap.style, { display: 'block', right: 'auto', bottom: 'auto', ...styles[edge] });
+    };
     const move = (ev) => {
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       if (!moved && Math.hypot(dx, dy) < 3) return;
@@ -1712,13 +1739,23 @@
       };
       applyGeometry();
       if (bookmarks) bookmarks.update();
+      showSnap(snapEdgeAtCurrent());
     };
     const up = () => {
       window.removeEventListener('pointermove', move, true);
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
       if (bookmarks) bookmarks.el.classList.remove('dragging-overlay');
-      if (moved) saveSettings();
+      const edge = moved ? snapEdgeAtCurrent() : null;
+      if (els.snap) els.snap.style.display = 'none';
+      if (!moved) return;
+      if (edge) {
+        settings.edge = edge;
+        settings.style = 'docked';
+        settings.winRect = null;
+        saveSettings();
+        applySettings(true);
+      } else saveSettings();
     };
     window.addEventListener('pointermove', move, true);
     window.addEventListener('pointerup', up, true);
@@ -1893,8 +1930,17 @@
       placement: () => ({ left: 'right', right: 'left', top: 'below', bottom: 'above' })[settings.edge],
       floating: () => isBox(),
       vw,
+      vh,
       setFloatingSide: (side) => {
-        els.panel.classList.toggle('bookmarks-left', side === 'left');
+        for (const cls of ['bookmarks-left', 'bookmarks-top', 'bookmarks-bottom']) els.panel.classList.remove(cls);
+        if (side === 'left') els.panel.classList.add('bookmarks-left');
+        if (side === 'top') els.panel.classList.add('bookmarks-top');
+        if (side === 'bottom') els.panel.classList.add('bookmarks-bottom');
+      },
+      setFloatingBookmarkEdge: (edge) => {
+        settings.floatingBookmarksEdge = edge || 'auto';
+        saveSettings();
+        if (bookmarks) bookmarks.update();
       },
       send,
       setMode: (mode) => { settings.bookmarksMode = mode; saveSettings(); update(true); },
