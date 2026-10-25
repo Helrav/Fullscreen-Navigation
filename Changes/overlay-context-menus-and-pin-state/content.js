@@ -13,6 +13,7 @@
 
   let settings = tpNormalize();
   let pinned = false, fullscreen = false, peek = false, shown = false;
+  let dockedPinned = false;
   let u = 1;                   // 1 / browser zoom: keeps the overlay the same real size on every page
   let data = { cur: -1, windows: [], groups: {} };
   let flat = [];
@@ -216,9 +217,17 @@
 
   async function loadStorage() {
     try {
-      const r = await api.storage.local.get(['settings', 'pinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId']);
+      const r = await api.storage.local.get(['settings', 'pinned', 'dockedPinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId']);
       settings = tpNormalize(r.settings);
       pinned = !!r.pinned;
+      // Legacy floating mode always forced pinned=true, so only infer from the
+      // live pin when the saved layout is docked and no previous docked state exists.
+      dockedPinned = typeof r.dockedPinned === 'boolean'
+        ? r.dockedPinned
+        : (settings.style === 'docked' ? pinned : false);
+      if (typeof r.dockedPinned !== 'boolean') {
+        try { api.storage.local.set({ dockedPinned }); } catch (_) {}
+      }
       collapsed = r.collapsed || {};
       windowNames = r.windowNames || {};
       if (Array.isArray(r.toolbarOrder)) {
@@ -247,10 +256,15 @@
 
   function setPinned(v) {
     pinned = !!v;
+    const state = { pinned };
+    if (settings.style === 'docked') {
+      dockedPinned = pinned;
+      state.dockedPinned = dockedPinned;
+    }
     if (!pinned) peek = isBox() ? false : true;
     if (pinned) peek = false;
     update();
-    try { api.storage.local.set({ pinned }); } catch (e) {}
+    try { api.storage.local.set(state); } catch (e) {}
   }
 
   // ---------- hot zone (real pixels: page px = real px * u) ----------
@@ -792,16 +806,6 @@
       }
       scrollSel = false;
     }
-    updateTools();
-  }
-
-  function updateTools() {
-    if (!els.closeSel || !els.clearSel) return;
-    const n = selected.size;
-    if (els.tools) els.tools.style.display = n ? '' : 'none';
-    els.closeSel.style.display = n ? '' : 'none';
-    els.clearSel.style.display = n ? '' : 'none';
-    els.closeSel.textContent = 'Close ' + n;
   }
 
   function visibleIndex(id) { return flat.findIndex((entry) => entry.id === id); }
@@ -985,13 +989,44 @@
     ], x, y);
   }
 
-  function showWindowMenu(windowId, x, y) {
+  async function getReopenMenuItem() {
+    const info = await send({ type: 'recentClosedInfo' });
+    const kind = info && info.kind;
+    return {
+      label: kind === 'window' ? 'Reopen closed windows' : 'Reopen closed tabs',
+      shortcut: 'Ctrl+Shift+T',
+      disabled: !kind,
+      action: () => send(info && info.sessionId
+        ? { type: 'restoreSession', sessionId: info.sessionId }
+        : { type: 'restoreLastClosed' })
+    };
+  }
+
+  async function showOverlayMenu(windowId, x, y) {
+    if (!contextMenu) return;
+    const reopen = await getReopenMenuItem();
+    contextMenu.show([
+      { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
+      reopen,
+      { sep: true },
+      { label: 'Task manager', action: () => send({ type: 'openTaskManager', windowId }) },
+      { label: 'Settings', action: () => openSettingsCard() }
+    ], x, y);
+  }
+
+  async function showWindowMenu(windowId, x, y) {
     const win = (data.windows || []).find((item) => item.id === windowId);
     if (!win || !contextMenu) return;
+    const reopen = await getReopenMenuItem();
     contextMenu.show([
-      { label: win.name ? 'Rename window…' : 'Name window…', action: () => promptText('Rename window', win.name || '', (name) => send({ type: 'renameWindow', windowId, name })) },
-      { label: collapsed['w' + windowId] ? 'Expand window' : 'Collapse window', action: () => toggleCollapse('w' + windowId) },
-      { label: 'Move selected tabs here', disabled: selected.size === 0, action: () => send({ type: 'move', tabIds: orderedIds([...selected]), target: { kind: 'window', windowId } }) }
+      { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
+      reopen,
+      { label: 'Bookmark all tabs…', shortcut: 'Ctrl+Shift+D', disabled: !win.tabs.length, action: () => send({ type: 'tabop', op: 'bookmark', tabIds: win.tabs.map((tab) => tab.id) }) },
+      { sep: true },
+      { label: 'Name window…', action: () => promptText('Name window', win.name || '', (name) => send({ type: 'renameWindow', windowId, name })) },
+      { label: collapsed['w' + windowId] ? 'Expand' : 'Collapse', action: () => toggleCollapse('w' + windowId) },
+      { sep: true },
+      { label: 'Close', shortcut: 'Alt+F4', danger: true, action: () => send({ type: 'closeWindow', windowId }) }
     ], x, y);
   }
 
@@ -1506,7 +1541,7 @@
       const rect = ensureWindowRect();
       if (collapsed) {
         const maxWidth = Math.min(800, Math.max(52, viewportWidth - 12));
-        const width = tpClamp(Math.round(viewportWidth * 0.2), 52, maxWidth);
+        const width = tpClamp(Math.round(viewportWidth * 0.15), 52, maxWidth);
         const right = rect.x + rect.w;
         const x = settings.edge === 'right' ? right - width : rect.x;
         settings.winRect = {
@@ -1526,11 +1561,11 @@
       }
     } else if (isVertical()) {
       settings.panelWidth = collapsed
-        ? tpClamp(Math.round(viewportWidth * 0.2), 52, 800)
+        ? tpClamp(Math.round(viewportWidth * 0.15), 52, 800)
         : 52;
     } else {
       settings.barHeight = collapsed
-        ? tpClamp(Math.round(viewportHeight * 0.2), 40, 400)
+        ? tpClamp(Math.round(viewportHeight * 0.15), 40, 400)
         : 40;
     }
 
@@ -1558,7 +1593,6 @@
     els.pin.title = pinned ? 'Unpin' : 'Pin open (stays visible when you switch tabs)';
     if (els.bookmarkBtn) els.bookmarkBtn.setAttribute('aria-pressed', String(!!settings.bookmarks));
     updateHintVisibility();
-    updateTools();
 
     const needPort = vis && document.visibilityState === 'visible';
     if (needPort && !port) { connect(); refreshTabs(); }
@@ -1742,11 +1776,13 @@
         settings.style = 'docked';
         settings.winRect = null;
       } else {
+        // Floating mode requires being visible, but keep the last docked pin
+        // preference intact so snapping back to an edge restores that state.
         settings.style = 'windowed';
         settings.winRect = current;
         pinned = true;
         peek = false;
-        try { api.storage.local.set({ pinned: true }); } catch (_) {}
+        try { api.storage.local.set({ pinned: true, dockedPinned }); } catch (_) {}
       }
       hotZoneEditMode = false;
       updateHintVisibility();
@@ -1829,6 +1865,9 @@
         settings.edge = edge;
         settings.style = 'docked';
         settings.winRect = null;
+        pinned = !!dockedPinned;
+        peek = false;
+        try { api.storage.local.set({ pinned, dockedPinned }); } catch (_) {}
         saveSettings();
         applySettings(true);
       } else {
@@ -1946,12 +1985,7 @@
     els.edgeTools = h('div', 'edge-tools');
     applyToolbarOrder();
     setupToolbarReordering();
-    const tools = h('div', 'tools');
-    els.tools = tools;
-    els.closeSel = textBtn('tbtn closesel', 'Close');
-    els.clearSel = textBtn('tbtn clearsel', 'Clear');
-    tools.append(els.closeSel, els.clearSel);
-    top.append(head, tools);
+    top.appendChild(head);
     // Click-and-hold any non-interactive part of the top bar to move the overlay.
     top.addEventListener('pointerdown', startOverlayDrag);
 
@@ -2055,6 +2089,8 @@
 
     // Avoid page keyboard listeners taking over focus when the address/search field is in use.
     els.panel.addEventListener('mousedown', (e) => {
+      // Preserve the browser's native contextmenu event on secondary clicks.
+      if (e.button !== 0) return;
       if (e.target !== els.search && !(e.target.closest && e.target.closest('button,.tab,.rz'))) e.preventDefault();
     });
     hoverable(els.panel);
@@ -2065,9 +2101,6 @@
       update();
     });
     els.gear.addEventListener('click', openSettingsCard);
-    els.closeSel.addEventListener('click', () => closeTabs([...selected]));
-    els.clearSel.addEventListener('click', clearSel);
-
     els.list.addEventListener('click', (e) => {
       const tabNode = e.target.closest && e.target.closest('.tab');
       if (tabNode) {
@@ -2108,6 +2141,19 @@
         e.preventDefault();
         showWindowMenu(Number(windowNode.dataset.win), e.clientX, e.clientY);
       }
+    });
+
+    // Right-click only the overlay's own blank space. Tabs, window/group
+    // headers and controls retain their dedicated handlers; bookmarks live
+    // outside this panel and are not affected.
+    els.panel.addEventListener('contextmenu', (e) => {
+      if (e.defaultPrevented) return;
+      const target = e.target;
+      if (!target || !target.closest) return;
+      if (target.closest('.tab,.whead,.ghead,button,input,textarea,select,a,.rz,.sizebadge,.menu,.submenu,.card,.prompt,.backdrop')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showOverlayMenu(Number.isInteger(data.cur) ? data.cur : undefined, e.clientX, e.clientY);
     });
     els.list.addEventListener('mouseover', (e) => {
       const node = e.target.closest && e.target.closest('.tab,.whead,.ghead');
@@ -2295,6 +2341,7 @@
         applySettings();
       }
       if (ch.collapsed) { collapsed = ch.collapsed.newValue || {}; render(); }
+      if (ch.dockedPinned) dockedPinned = !!ch.dockedPinned.newValue;
       if (ch.pinned) {
         const v = !!ch.pinned.newValue;
         if (v !== pinned) {

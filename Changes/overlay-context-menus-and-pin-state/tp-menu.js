@@ -54,6 +54,7 @@
           lead.appendChild(it.icon());
         }
         row.append(lead, h('span', 'mlabel', it.label));
+        if (it.shortcut) row.appendChild(h('span', 'mshortcut', it.shortcut));
         if (it.checked) row.appendChild(h('span', 'mchk', '✓'));
         if (it.sub) {
           row.appendChild(h('span', 'marrow', '›'));

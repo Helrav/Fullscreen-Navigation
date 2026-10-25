@@ -280,6 +280,7 @@ globalThis.TPX.CSS = `
 .mlead{flex:none;width:16px;height:16px;display:grid;place-items:center}
 .mdot{width:11px;height:11px;border-radius:50%}
 .mlabel{min-width:0;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.mshortcut{flex:none;margin-left:auto;padding-left:20px;color:var(--muted);font-size:11px;line-height:1.2}
 .mchk{margin-left:auto;padding-left:12px;color:var(--accent)}
 .marrow{margin-left:auto;padding-left:14px;opacity:.6}
 .msep{height:1px;margin:4px 2px;background:var(--line)}

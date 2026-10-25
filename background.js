@@ -21,8 +21,11 @@ if (api.windows && api.windows.onRemoved) {
 
 api.commands.onCommand.addListener(async (command) => {
   if (command !== 'toggle-pin') return;
-  const { pinned } = await api.storage.local.get('pinned');
-  await api.storage.local.set({ pinned: !pinned });
+  const { pinned, settings } = await api.storage.local.get(['pinned', 'settings']);
+  const next = !pinned;
+  const state = { pinned: next };
+  if (!settings || settings.style !== 'windowed') state.dockedPinned = next;
+  await api.storage.local.set(state);
 });
 
 const slim = (tab) => ({
@@ -590,6 +593,27 @@ async function handle(message, sender) {
     }
     case 'tabs':
       return { cur: windowId, ...(await collect()) };
+    case 'recentClosedInfo': {
+      if (!api.sessions || !api.sessions.getRecentlyClosed) return { ok: false, kind: null };
+      const [last] = await api.sessions.getRecentlyClosed({ maxResults: 1 });
+      if (!last) return { ok: true, kind: null };
+      if (last.window) return { ok: true, kind: 'window', sessionId: last.window.sessionId || null };
+      if (last.tab) return { ok: true, kind: 'tab', sessionId: last.tab.sessionId || null };
+      return { ok: true, kind: null };
+    }
+    case 'restoreLastClosed': {
+      if (!api.sessions || !api.sessions.getRecentlyClosed || !api.sessions.restore) return { ok: false, reason: 'unsupported' };
+      const [last] = await api.sessions.getRecentlyClosed({ maxResults: 1 });
+      if (!last) return { ok: false, reason: 'none' };
+      const sessionId = (last.window && last.window.sessionId) || (last.tab && last.tab.sessionId);
+      await api.sessions.restore(sessionId);
+      return { ok: true, kind: last.window ? 'window' : 'tab' };
+    }
+    case 'restoreSession': {
+      if (!api.sessions || !api.sessions.restore || typeof message.sessionId !== 'string' || !message.sessionId) return { ok: false, reason: 'unsupported' };
+      await api.sessions.restore(message.sessionId);
+      return { ok: true };
+    }
     case 'activate': {
       if (!Number.isInteger(message.tabId)) return { ok: false };
       const tab = await api.tabs.get(message.tabId);
@@ -604,9 +628,25 @@ async function handle(message, sender) {
     }
     case 'undo':
       return undoClose(message.count || message.n, message.since || 0);
-    case 'newTab':
-      await api.tabs.create({ windowId });
+    case 'newTab': {
+      const targetWindowId = Number.isInteger(message.windowId) ? message.windowId : windowId;
+      await api.tabs.create({ ...(Number.isInteger(targetWindowId) ? { windowId: targetWindowId } : {}) });
       return { ok: true };
+    }
+    case 'closeWindow': {
+      if (!Number.isInteger(message.windowId)) return { ok: false, reason: 'invalid-window' };
+      await api.windows.remove(message.windowId);
+      return { ok: true };
+    }
+    case 'openTaskManager': {
+      const targetWindowId = Number.isInteger(message.windowId) ? message.windowId : windowId;
+      const ua = String((globalThis.navigator && globalThis.navigator.userAgent) || '');
+      const url = /Firefox\//i.test(ua) ? 'about:processes'
+        : /Edg\//i.test(ua) ? 'edge://taskmanager/'
+        : 'chrome://taskmanager/';
+      await api.tabs.create({ url, ...(Number.isInteger(targetWindowId) ? { windowId: targetWindowId } : {}) });
+      return { ok: true };
+    }
     case 'go':
       return go(message.text, !!message.inNew, sender);
     case 'openUrl': {
