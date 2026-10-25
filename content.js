@@ -1332,7 +1332,7 @@
   }
 
   function currentWidthUnits() {
-    if (!isVertical()) return 9999;
+    if (!isVertical() && !isBox()) return 9999;
     return isBox() && settings.winRect ? settings.winRect.w : settings.panelWidth;
   }
 
@@ -1361,12 +1361,18 @@
     const width = Math.max(100, Math.min(210, viewportW - 16));
     let left;
     let top;
-    if (settings.edge === 'right') left = anchor.left - width - 6;
-    else if (settings.edge === 'left') left = anchor.right + 6;
-    else left = anchor.left;
-    if (settings.edge === 'top') top = anchor.bottom + 5;
-    else if (settings.edge === 'bottom') top = anchor.top - 37;
-    else top = anchor.top + (anchor.height - 32) / 2;
+    if (isBox()) {
+      const panelRect = els.panel.getBoundingClientRect();
+      left = panelRect.right + 6 + width <= viewportW - 8 ? panelRect.right + 6 : panelRect.left - width - 6;
+      top = anchor.top + (anchor.height - 32) / 2;
+    } else {
+      if (settings.edge === 'right') left = anchor.left - width - 6;
+      else if (settings.edge === 'left') left = anchor.right + 6;
+      else left = anchor.left;
+      if (settings.edge === 'top') top = anchor.bottom + 5;
+      else if (settings.edge === 'bottom') top = anchor.top - 37;
+      else top = anchor.top + (anchor.height - 32) / 2;
+    }
     left = tpClamp(left, 8, Math.max(8, viewportW - width - 8));
     top = tpClamp(top, 8, Math.max(8, viewportH - 40));
     els.searchWrap.style.width = width + 'px';
@@ -1459,7 +1465,8 @@
       settings.winRect = { x, y, w, h: hh };
       for (const [key, value] of [['--bx', x], ['--by', y], ['--bw', w], ['--bh', hh]]) hostEl.style.setProperty(key, value + 'px');
     }
-    panel.dataset.side = s.edge === 'right' ? 'end' : 'start';
+    panel.dataset.side = isBox() ? 'start' : (s.edge === 'right' ? 'end' : 'start');
+    panel.dataset.dir = (isBox() || isVertical()) ? 'v' : 'h';
     panel.classList.toggle('resizing', resizing);
     const compact = currentWidthUnits() < COMPACT_BELOW;
     panel.classList.toggle('compact', compact);
@@ -1478,6 +1485,8 @@
     if (vis && !shown) { needCenter = true; measure(); placeHint(); }
     shown = vis;
     els.panel.classList.toggle('hidden', !vis);
+    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks));
+    if (!(vis && isBox() && settings.bookmarks)) els.panel.classList.remove('bookmarks-left');
     updateResizeBuffer();
     if (ui) ui.dataset.theme = settings.theme;
     els.pin.setAttribute('aria-pressed', String(pinned));
@@ -1504,7 +1513,7 @@
     if (!els.panel) return;
     const s = settings, p = els.panel;
     p.dataset.edge = s.edge;
-    p.dataset.dir = isVertical() ? 'v' : 'h';
+    p.dataset.dir = (isBox() || isVertical()) ? 'v' : 'h';
     p.dataset.style = s.style;
     p.dataset.align = tpAlign(s);
     p.dataset.theme = s.theme;
@@ -1749,7 +1758,7 @@
         let dx = e.deltaX * scale;
         let dy = e.deltaY * scale;
         // On the horizontal rail, a conventional vertical wheel moves the tab row sideways.
-        if (scroller === els.list && !isVertical() && Math.abs(dy) > Math.abs(dx)) {
+        if (scroller === els.list && !isVertical() && !isBox() && Math.abs(dy) > Math.abs(dx)) {
           dx = dy;
           dy = 0;
         }
@@ -1882,6 +1891,11 @@
       u: () => u,
       panelRect: () => els.panel.getBoundingClientRect(),
       placement: () => ({ left: 'right', right: 'left', top: 'below', bottom: 'above' })[settings.edge],
+      floating: () => isBox(),
+      vw,
+      setFloatingSide: (side) => {
+        els.panel.classList.toggle('bookmarks-left', side === 'left');
+      },
       send,
       setMode: (mode) => { settings.bookmarksMode = mode; saveSettings(); update(true); },
       open: openBookmark,
@@ -1984,7 +1998,7 @@
         const id = Number(tabNode.dataset.id);
         if (dragIds.includes(id)) return { invalid: true, node: tabNode };
         const r = tabNode.getBoundingClientRect();
-        const after = isVertical() ? e.clientY >= r.top + r.height / 2 : e.clientX >= r.left + r.width / 2;
+        const after = (isBox() || isVertical()) ? e.clientY >= r.top + r.height / 2 : e.clientX >= r.left + r.width / 2;
         return { target: { kind: 'tab', tabId: id, pos: after ? 'after' : 'before' }, node: tabNode, after };
       }
       const groupNode = e.target.closest && e.target.closest('.ghead');

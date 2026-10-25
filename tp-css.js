@@ -10,18 +10,18 @@ globalThis.TPX.CSS = `
 .ui[data-theme=dark]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14)}
 @media (prefers-color-scheme:dark){.ui[data-theme=auto]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14)}}
 
-/* Minimal scrollbars: invisible track; a wider, clearly visible thumb on hover. */
-*{scrollbar-width:thin;scrollbar-color:transparent transparent}
-*:hover{scrollbar-color:color-mix(in srgb,var(--muted) 82%,transparent) transparent}
-*::-webkit-scrollbar{width:7px;height:7px;background:transparent}
+/* Minimal scrollbars: no track; a wider thumb appears over the scroller and remains easy to grab. */
+*{scrollbar-width:auto;scrollbar-color:transparent transparent}
+*:hover{scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
+*::-webkit-scrollbar{width:10px;height:10px;background:transparent}
 *::-webkit-scrollbar-track{background:transparent;border:0}
 *::-webkit-scrollbar-corner{background:transparent}
-*::-webkit-scrollbar-thumb{background:transparent;border:1px solid transparent;border-radius:999px;background-clip:padding-box}
-*:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 82%,transparent)}
+*::-webkit-scrollbar-thumb{background:transparent;border:2px solid transparent;border-radius:999px;background-clip:padding-box}
+*:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
 *:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
 .list,.bmlist,.bmstrip,.menu.scroll,.submenu.scroll{overscroll-behavior:contain}
-.list:hover,.list:focus-within,.bmlist:hover,.bmlist:focus-within,.bmstrip:hover,.bmstrip:focus-within,.menu.scroll:hover,.menu.scroll:focus-within,.submenu.scroll:hover,.submenu.scroll:focus-within{scrollbar-color:color-mix(in srgb,var(--muted) 82%,transparent) transparent}
-.list:hover::-webkit-scrollbar-thumb,.list:focus-within::-webkit-scrollbar-thumb,.bmlist:hover::-webkit-scrollbar-thumb,.bmlist:focus-within::-webkit-scrollbar-thumb,.bmstrip:hover::-webkit-scrollbar-thumb,.bmstrip:focus-within::-webkit-scrollbar-thumb,.menu.scroll:hover::-webkit-scrollbar-thumb,.menu.scroll:focus-within::-webkit-scrollbar-thumb,.submenu.scroll:hover::-webkit-scrollbar-thumb,.submenu.scroll:focus-within::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 82%,transparent)}
+.list:hover,.list:focus-within,.bmlist:hover,.bmlist:focus-within,.bmstrip:hover,.bmstrip:focus-within,.menu.scroll:hover,.menu.scroll:focus-within,.submenu.scroll:hover,.submenu.scroll:focus-within{scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
+.list:hover::-webkit-scrollbar-thumb,.list:focus-within::-webkit-scrollbar-thumb,.bmlist:hover::-webkit-scrollbar-thumb,.bmlist:focus-within::-webkit-scrollbar-thumb,.bmstrip:hover::-webkit-scrollbar-thumb,.bmstrip:focus-within::-webkit-scrollbar-thumb,.menu.scroll:hover::-webkit-scrollbar-thumb,.menu.scroll:focus-within::-webkit-scrollbar-thumb,.submenu.scroll:hover::-webkit-scrollbar-thumb,.submenu.scroll:focus-within::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
 .list:hover::-webkit-scrollbar-thumb:hover,.bmlist:hover::-webkit-scrollbar-thumb:hover,.bmstrip:hover::-webkit-scrollbar-thumb:hover,.menu.scroll:hover::-webkit-scrollbar-thumb:hover,.submenu.scroll:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
 
 
@@ -48,6 +48,8 @@ globalThis.TPX.CSS = `
 .panel[data-style=docked][data-edge=top]{left:0;right:var(--sbv,0px);top:0;height:var(--h)}
 .panel[data-style=docked][data-edge=bottom]{left:0;right:var(--sbv,0px);bottom:var(--sbh,0px);height:var(--h)}
 .panel[data-style=windowed]{left:var(--bx);top:var(--by);width:var(--bw);height:var(--bh);border-radius:14px}
+.panel[data-style=windowed].with-floating-bookmarks:not(.bookmarks-left){border-top-right-radius:0;border-bottom-right-radius:0}
+.panel[data-style=windowed].with-floating-bookmarks.bookmarks-left{border-top-left-radius:0;border-bottom-left-radius:0}
 .panel.moving{transition:none}
 .panel.dragging-overlay{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
 
@@ -164,6 +166,7 @@ globalThis.TPX.CSS = `
 /* ---------- list ---------- */
 .list{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:2px;padding:6px;overflow:auto;scrollbar-width:thin}
 .panel[data-dir=h] .list{flex-direction:row;align-items:stretch;overflow-y:hidden;padding:0}
+.panel[data-style=windowed][data-dir=v] .list{flex-direction:column;overflow:auto}
 .win{display:flex;flex-direction:column;gap:2px;border-radius:8px}
 .win+.win{margin-top:6px}
 .windivider{flex:none;align-self:center;width:min(58%,120px);height:1px;margin:7px 0;background:color-mix(in srgb,var(--line) 72%,var(--muted));pointer-events:none}
@@ -304,8 +307,9 @@ globalThis.TPX.CSS = `
 .bm.pending-place{visibility:hidden}
 .bm.dragging-overlay{visibility:hidden!important}
 /* Bookmarks are a drawer attached directly to the overlay, with no arrow tab. */
-.bm[data-pos=right],.bm[data-pos=left]{flex-direction:row}
+.bm[data-pos=right],.bm[data-pos=left],.bm[data-pos^=floating-]{flex-direction:row}
 .bm[data-pos=below],.bm[data-pos=above]{flex-direction:column}
+.bm[data-pos^=floating-]{align-items:stretch}
 .bm.open .bmc{box-shadow:none;border:1px solid var(--line)}
 .bm:not(.open) .bmc{display:none}
 .bmc{pointer-events:auto;display:flex;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 6px 20px rgba(0,0,0,.22);overflow:hidden}
@@ -315,6 +319,9 @@ globalThis.TPX.CSS = `
 .bm[data-pos=right][data-mode=card] .bmc{border-radius:0 8px 8px 0}
 .bm[data-pos=left][data-mode=card] .bmc{border-radius:8px 0 0 8px}
 .bm[data-mode=bar] .bmc{width:100%;height:36px;align-self:stretch;box-shadow:none;border:1px solid var(--line)}
+.bm[data-pos^=floating-][data-mode=floating] .bmc{flex-direction:column;width:var(--bm-floating-width,250px);height:100%;max-height:100%;align-self:stretch;flex:0 1 var(--bm-floating-width,250px);margin:0;border:1px solid var(--line);box-shadow:0 6px 20px rgba(0,0,0,.22);border-radius:0}
+.bm[data-pos=floating-right][data-mode=floating] .bmc{border-left:0;border-radius:0 14px 14px 0}
+.bm[data-pos=floating-left][data-mode=floating] .bmc{border-right:0;border-radius:14px 0 0 14px}
 .bmempty{padding:10px 12px;color:var(--muted)}
 .bmhead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 12px;border-bottom:1px solid var(--line);font-weight:600}
 .bmmode{flex:none}

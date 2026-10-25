@@ -150,6 +150,7 @@
         const b = h('button', 'bmitem');
         b.type = 'button';
         b.append(icon(n), h('span', 'bmt', label(n)));
+        b.title = label(n) || n.url || '';
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
@@ -210,7 +211,8 @@
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('mouseenter', () => {
           const title = label(n);
-          if (title) env.tip(b.getBoundingClientRect(), title, n.url || '', side);
+          const hoverText = title || n.url || '';
+          if (hoverText) env.tip(b.getBoundingClientRect(), hoverText, title ? (n.url || '') : '', side);
           else env.hideTip();
         });
         b.addEventListener('mouseleave', () => env.hideTip());
@@ -259,6 +261,7 @@
             }
           } else {
             row.append(h('span', 'bmsp'), icon(n), h('span', 'bmt', label(n)));
+            if (!label(n) && n.url) row.title = n.url;
             row.addEventListener('click', (e) => openBm(n, e));
             row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
             row.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
@@ -275,14 +278,40 @@
       content.replaceChildren();
       if (!env.settings().bookmarks) return;
       if (!data) { content.appendChild(h('div', 'bmempty', loading ? 'Loading…' : 'Bookmarks are not available')); return; }
-      if (horizontal()) renderBar();
+      if (el.dataset.mode === 'floating') renderCard();
+      else if (horizontal()) renderBar();
       else if (env.settings().bookmarksMode === 'strip') renderStrip();
       else renderCard();
     }
 
     // ----- placement next to the overlay -----
     function place() {
-      const u = env.u(), r = env.panelRect(), pos = env.placement(), st = el.style;
+      const u = env.u(), r = env.panelRect(), st = el.style;
+      const floating = !!(env.floating && env.floating());
+      if (floating) {
+        const viewportWidth = typeof env.vw === 'function' ? env.vw() : window.innerWidth;
+        const spaceRight = Math.max(0, (viewportWidth - r.right) / u);
+        const spaceLeft = Math.max(0, r.left / u);
+        const side = (spaceRight >= 250 || spaceRight >= spaceLeft) ? 'right' : 'left';
+        const available = side === 'right' ? spaceRight : spaceLeft;
+        const width = Math.max(120, Math.min(250, available || 250));
+        const pos = 'floating-' + side;
+        el.dataset.pos = pos;
+        el.dataset.mode = 'floating';
+        el.style.setProperty('--bm-floating-width', width + 'px');
+        if (env.setFloatingSide) env.setFloatingSide(side);
+        st.right = 'auto';
+        st.top = (r.top / u) + 'px';
+        st.height = (r.height / u) + 'px';
+        st.width = 'auto';
+        st.bottom = 'auto';
+        st.left = ((side === 'right' ? r.right : r.left) / u) + 'px';
+        st.transform = side === 'right' ? '' : 'translateX(-100%)';
+        return;
+      }
+      if (env.setFloatingSide) env.setFloatingSide(null);
+      el.style.removeProperty('--bm-floating-width');
+      const pos = env.placement();
       el.dataset.pos = pos;
       el.dataset.mode = (pos === 'below' || pos === 'above') ? 'bar' : env.settings().bookmarksMode;
       st.right = 'auto';
@@ -327,7 +356,7 @@
     // Space the bookmarks take on the page side (used to push the page by the right amount).
     function thickness() {
       const s = env.settings();
-      if (!env.shown() || !s.bookmarks) return 0;
+      if (!env.shown() || !s.bookmarks || (env.floating && env.floating())) return 0;
       if (el.dataset.pos === 'below' || el.dataset.pos === 'above') return BAR_H;
       // The drawer starts directly at the overlay edge; no chevron tab is present.
       return s.bookmarksMode === 'strip' ? STRIP_W : 250;
