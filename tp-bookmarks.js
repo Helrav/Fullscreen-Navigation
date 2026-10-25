@@ -16,6 +16,12 @@
     // The bookmarks drawer is attached directly to the overlay. It is opened
     // by the existing Bookmarks toolbar icon; there is no separate chevron tab.
     el.appendChild(content);
+    content.addEventListener('contextmenu', (e) => {
+      const target = e.target;
+      const blankSurface = target === content || (target && target.classList
+        && ['bmlist', 'bmstrip', 'bmbar', 'bmrow', 'bmempty'].some((cls) => target.classList.contains(cls)));
+      if (blankSurface) showContextMenu(e, null);
+    });
     ui.appendChild(el);
     env.hoverable(el);
 
