@@ -1,0 +1,88 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Peek",
+  "version": "0.1",
+  "description": "A customizable slide-in tab manager with multi-tab actions, bookmarks, and a floating window mode.",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage",
+    "search",
+    "bookmarks",
+    "sessions",
+    "favicon"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "defaults.js",
+        "tp-css.js",
+        "tp-push.js",
+        "tp-menu.js",
+        "tp-bookmarks.js",
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "options.html",
+        "options.css",
+        "options.js",
+        "defaults.js",
+        "_favicon/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "extension_ids": [
+        "*"
+      ]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "action": {
+    "default_title": "Tab Peek settings",
+    "default_popup": "options.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "commands": {
+    "toggle-pin": {
+      "suggested_key": {
+        "default": "Alt+Shift+T"
+      },
+      "description": "Pin or hide the tab overlay"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tab-peek@example.com",
+      "strict_min_version": "121.0"
+    }
+  }
+}
