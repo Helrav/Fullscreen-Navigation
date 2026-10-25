@@ -275,6 +275,9 @@ globalThis.TPX.CSS = `
 .cardhead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:8px 8px 8px 16px;border-bottom:1px solid var(--line);font-weight:600}
 .cardframe{flex:1;min-height:0;width:100%;border:0;background:var(--bg)}
 .prompt{width:300px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.bookmark-prompt{width:min(380px,calc(100vw / var(--u,1) - 24px))}
+.bookmark-field{display:flex;flex-direction:column;gap:5px;color:var(--muted);font-size:12px}
+.bookmark-field .search{height:32px;position:static;color:var(--fg);font-size:13px}
 .ptitle{font-weight:600}
 .pfield{height:30px;position:relative}
 .prow{display:flex;justify-content:flex-end;gap:8px}
@@ -283,6 +286,7 @@ globalThis.TPX.CSS = `
 /* ---------- bookmarks ---------- */
 .bm{position:fixed;z-index:4;zoom:var(--u,1);display:flex;align-items:center;pointer-events:none}
 .bm.hidden{display:none}
+.bm.pending-place{visibility:hidden}
 /* Bookmarks are a drawer attached directly to the overlay, with no arrow tab. */
 .bm[data-pos=right],.bm[data-pos=left]{flex-direction:row}
 .bm[data-pos=below],.bm[data-pos=above]{flex-direction:column}
