@@ -10,6 +10,17 @@ globalThis.TPX.CSS = `
 .ui[data-theme=dark]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14)}
 @media (prefers-color-scheme:dark){.ui[data-theme=auto]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14)}}
 
+/* Minimal scrollbars: no track, and a thumb only while hovering the scroller. */
+*{scrollbar-width:thin;scrollbar-color:transparent transparent}
+*:hover{scrollbar-color:color-mix(in srgb,var(--muted) 70%,transparent) transparent}
+*::-webkit-scrollbar{width:5px;height:5px;background:transparent}
+*::-webkit-scrollbar-track{background:transparent;border:0}
+*::-webkit-scrollbar-corner{background:transparent}
+*::-webkit-scrollbar-thumb{background:transparent;border:1px solid transparent;border-radius:999px;background-clip:padding-box}
+*:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 70%,transparent)}
+*:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
+
+
 /* ---------- panel ---------- */
 .panel{
   zoom:var(--u,1);
@@ -311,7 +322,7 @@ globalThis.TPX.CSS = `
 .bmchev{flex:none;width:16px;height:16px;fill:currentColor;color:var(--muted);transform:none}
 .bmchev.o{transform:rotate(90deg)}
 .bmsp{flex:none;width:16px}
-.bmstrip{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;overflow-y:auto;scrollbar-width:none}
+.bmstrip{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;overflow-y:auto}
 .bmicon{flex:none;width:34px;height:32px;display:grid;place-items:center;padding:0;border:0;border-radius:7px;background:transparent;cursor:pointer}
 .bmicon:hover{background:var(--hover)}
 .bmbar{display:flex;align-items:center;width:100%;height:100%;padding:0 4px;gap:2px}
