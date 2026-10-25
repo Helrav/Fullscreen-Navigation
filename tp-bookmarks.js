@@ -55,6 +55,28 @@
       target.addEventListener('mouseleave', () => { if (env.hideTip) env.hideTip(); });
     }
 
+    function makeModeToggle(targetMode) {
+      const expanding = targetMode === 'card';
+      const btn = h('button', 'tbtn bmmode bm-mode-toggle');
+      btn.type = 'button';
+      const labelText = expanding ? 'Show bookmark names' : 'Show bookmark icons';
+      btn.title = labelText;
+      btn.setAttribute('aria-label', labelText);
+      const ns = 'http://www.w3.org/2000/svg';
+      const s = document.createElementNS(ns, 'svg');
+      s.setAttribute('viewBox', '0 0 24 24');
+      s.setAttribute('aria-hidden', 'true');
+      const p = document.createElementNS(ns, 'path');
+      p.setAttribute('d', expanding
+        ? 'M3 5h12v2H3zM3 10h9v2H3zM3 15h12v2H3zM14 7l5 5-5 5v-3h-3v-4h3z'
+        : 'M3 5h12v2H3zM3 10h9v2H3zM3 15h12v2H3zM18 7l-5 5 5 5v-3h3v-4h-3z');
+      s.appendChild(p);
+      btn.appendChild(s);
+      btn.addEventListener('mousedown', (e) => e.preventDefault());
+      btn.addEventListener('click', () => env.setMode(targetMode));
+      return btn;
+    }
+
     // ----- pieces -----
     function icon(n) {
       const s = h('span', 'fav');
@@ -232,11 +254,7 @@
 
     // ----- vertical strip: icons only -----
     function renderStrip() {
-      const modeButton = h('button', 'tbtn bmmode', 'Names');
-      modeButton.type = 'button';
-      modeButton.title = 'Show names';
-      modeButton.addEventListener('mousedown', (e) => e.preventDefault());
-      modeButton.addEventListener('click', () => env.setMode('card'));
+      const modeButton = makeModeToggle('card');
       let head = modeButton;
       if (el.dataset.mode === 'floating') {
         head = h('div', 'bmhead bmstriphead');
@@ -275,11 +293,7 @@
     function renderCard() {
       const head = h('div', 'bmhead');
       const title = h('span', 'bmtitle', 'Bookmarks');
-      const mode = h('button', 'tbtn bmmode', 'Icons');
-      mode.type = 'button';
-      mode.title = 'Show a narrow strip of icons';
-      mode.addEventListener('mousedown', (e) => e.preventDefault());
-      mode.addEventListener('click', () => env.setMode('strip'));
+      const mode = makeModeToggle('strip');
       head.append(title, mode);
       head.title = 'Drag this header to move bookmarks around the floating overlay';
       head.addEventListener('pointerdown', startFloatingBookmarkDrag);
@@ -296,7 +310,8 @@
             if (isOpen) c.classList.add('o');
             row.append(c, icon(n), h('span', 'bmt', label(n)));
             row.addEventListener('click', () => {
-              if (openIds.has(n.id)) openIds.delete(n.id); else openIds.add(n.id);
+              if (openIds.has(n.id)) return;
+              openIds.add(n.id);
               renderContent();
             });
             row.addEventListener('contextmenu', (e) => showContextMenu(e, n));

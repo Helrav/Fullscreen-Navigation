@@ -13,6 +13,7 @@
 
   let settings = tpNormalize();
   let pinned = false, fullscreen = false, peek = false, shown = false;
+  let overlayCollapsed = false;
   let u = 1;                   // 1 / browser zoom: keeps the overlay the same real size on every page
   let data = { cur: -1, windows: [], groups: {} };
   let flat = [];
@@ -58,6 +59,8 @@
   };
 
   const ICON_PIN = 'M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z';
+  const ICON_OVERLAY_COLLAPSE = 'M3 5h12v2H3zM3 10h9v2H3zM3 15h12v2H3zM18 7l-5 5 5 5v-3h3v-4h-3z';
+  const ICON_OVERLAY_EXPAND = 'M3 5h12v2H3zM3 10h9v2H3zM3 15h12v2H3zM14 7l5 5-5 5v-3h-3v-4h3z';
   const ICON_SEARCH = 'M10 2a8 8 0 1 0 4.906 14.32l5.387 5.386 1.414-1.414-5.386-5.387A8 8 0 0 0 10 2zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12z';
   const ICON_CHEV = 'M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z';
   const ICON_STACKED_TABS = 'M8 3.75h10.25A2.25 2.25 0 0 1 20.5 6v10.25a2.25 2.25 0 0 1-2.25 2.25H8A2.25 2.25 0 0 1 5.75 16.25V6A2.25 2.25 0 0 1 8 3.75Zm0 2A.25.25 0 0 0 7.75 6v10.25c0 .14.11.25.25.25h10.25a.25.25 0 0 0 .25-.25V6a.25.25 0 0 0-.25-.25H8ZM3.5 8.5h1.75v8.75c0 1.24 1.01 2.25 2.25 2.25h8.75v1.75H7.5a4 4 0 0 1-4-4V8.5Z';
@@ -214,9 +217,10 @@
 
   async function loadStorage() {
     try {
-      const r = await api.storage.local.get(['settings', 'pinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId']);
+      const r = await api.storage.local.get(['settings', 'pinned', 'overlayCollapsed', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId']);
       settings = tpNormalize(r.settings);
       pinned = !!r.pinned;
+      overlayCollapsed = !!r.overlayCollapsed;
       collapsed = r.collapsed || {};
       windowNames = r.windowNames || {};
       if (Array.isArray(r.toolbarOrder)) {
@@ -330,14 +334,6 @@
       els.editShield.classList.toggle('on', editing);
       els.editShield.style.pointerEvents = editing ? 'auto' : 'none';
       els.editShield.setAttribute('aria-hidden', String(!editing));
-    }
-    if (els.grip) {
-      els.grip.setAttribute('aria-pressed', String(editing));
-      els.grip.title = isBox()
-        ? 'Drag to move or dock the window.'
-        : editing
-          ? 'Hot-zone editing: drag the bar to reposition it; drag its ends or inner edge to adjust it. Click to finish.'
-          : 'Drag to move or dock. Click to edit the hot zone.';
     }
     updateResizeBuffer();
   }
@@ -1477,6 +1473,23 @@
     updateResizeBuffer();
   }
 
+  function syncOverlayToggle() {
+    if (!els.overlayToggle) return;
+    const path = els.overlayToggle.querySelector('path');
+    if (path) path.setAttribute('d', overlayCollapsed ? ICON_OVERLAY_EXPAND : ICON_OVERLAY_COLLAPSE);
+    const label = overlayCollapsed ? 'Expand overlay' : 'Collapse overlay';
+    els.overlayToggle.title = label;
+    els.overlayToggle.setAttribute('aria-label', label);
+    els.overlayToggle.setAttribute('aria-expanded', String(!overlayCollapsed));
+    els.overlayToggle.setAttribute('aria-pressed', String(overlayCollapsed));
+  }
+
+  function toggleOverlayCollapsed() {
+    overlayCollapsed = !overlayCollapsed;
+    try { api.storage.local.set({ overlayCollapsed }); } catch (_) {}
+    update(true);
+  }
+
   function update(instant) {
     if (dead || !els.panel) return;
     if (!allowed()) peek = false;
@@ -1485,7 +1498,9 @@
     if (vis && !shown) { needCenter = true; measure(); placeHint(); }
     shown = vis;
     els.panel.classList.toggle('hidden', !vis);
-    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks));
+    els.panel.classList.toggle('overlay-collapsed', overlayCollapsed);
+    syncOverlayToggle();
+    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks && !overlayCollapsed));
     if (!(vis && isBox() && settings.bookmarks)) {
       for (const cls of ['bookmarks-left', 'bookmarks-top', 'bookmarks-bottom']) els.panel.classList.remove(cls);
     }
@@ -1581,10 +1596,19 @@
     window.addEventListener('pointercancel', up, true);
   }
 
+  function startOverlayDrag(e) {
+    if (e.button !== 0) return;
+    const target = e.target;
+    const interactive = target && target.closest && target.closest(
+      'button,input,textarea,select,a,.searchwrap,.rz,.edge-tools,.sizebadge,.menu,.submenu'
+    );
+    if (interactive) return;
+    if (isBox()) startFloatingMove(e);
+    else startDockDrag(e);
+  }
+
   function startDockDrag(e) {
     if (e.button !== 0) return;
-    // The grip should move a floating window without replacing its saved dimensions.
-    if (isBox()) { startFloatingMove(e, true); return; }
     e.preventDefault();
     e.stopPropagation();
     clearClose();
@@ -1664,16 +1688,7 @@
     };
     const up = (ev) => {
       cleanup();
-      if (!moved) {
-        // In docked mode a click opens the on-page hot-zone editor. In
-        // windowed mode there is no activation zone to configure.
-        if (!isBox()) {
-          hotZoneEditMode = !hotZoneEditMode;
-          placeHint();
-          updateHintVisibility();
-        }
-        return;
-      }
+      if (!moved) return;
       if (snapEdge) {
         settings.edge = snapEdge;
         settings.style = 'docked';
@@ -1695,8 +1710,8 @@
     window.addEventListener('pointercancel', up, true);
   }
 
-  function startFloatingMove(e, fromGrip = false) {
-    if (!isBox() || e.button !== 0 || (e.target.closest && e.target.closest('button,input,.searchwrap,.rz') && !(fromGrip && e.target.closest('.grip')))) return;
+  function startFloatingMove(e) {
+    if (!isBox() || e.button !== 0 || (e.target.closest && e.target.closest('button,input,.searchwrap,.rz,.edge-tools'))) return;
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX, startY = e.clientY;
@@ -1843,8 +1858,14 @@
     const top = h('div', 'top');
     const head = h('div', 'head');
     els.head = head;
-    els.grip = iconBtn('btn grip', 'Drag to move or dock. Click to edit the hot zone.', 'M7 5a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 7 5zm5 0a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 12 5zm5 0a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 17 5zM7 11a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 7 11zm5 0a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 12 11zm5 0a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 17 11zM7 17a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 7 17zm5 0a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 12 17zm5 0a1.6 1.6 0 1 0 0 3.2A1.6 1.6 0 0 0 17 17z');
-    els.grip.addEventListener('pointerdown', startDockDrag);
+    els.overlayToggle = iconBtn('btn overlay-toggle', 'Collapse overlay', ICON_OVERLAY_COLLAPSE);
+    els.overlayToggle.setAttribute('aria-expanded', 'true');
+    els.overlayToggle.setAttribute('aria-label', 'Collapse overlay');
+    els.overlayToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleOverlayCollapsed();
+    });
     els.searchRow = h('div', 'searchrow');
     els.searchToggle = iconBtn('btn searchtoggle', 'Search', ICON_SEARCH);
     els.searchToggle.setAttribute('aria-label', 'Search');
@@ -1866,7 +1887,7 @@
       e.stopPropagation();
       clearSearchInput(true);
     });
-    els.searchRow.append(els.grip, els.searchToggle, els.searchWrap);
+    els.searchRow.append(els.overlayToggle, els.searchToggle, els.searchWrap);
     els.searchToggle.addEventListener('click', () => {
       if (searchPopupOpen) closeSearchPopup(true);
       else openSearchPopup();
@@ -1877,14 +1898,14 @@
     els.edgeTools = h('div', 'edge-tools');
     applyToolbarOrder();
     setupToolbarReordering();
-    head.addEventListener('pointerdown', startFloatingMove);
-
     const tools = h('div', 'tools');
     els.tools = tools;
     els.closeSel = textBtn('tbtn closesel', 'Close');
     els.clearSel = textBtn('tbtn clearsel', 'Clear');
     tools.append(els.closeSel, els.clearSel);
     top.append(head, tools);
+    // Click-and-hold any non-interactive part of the top bar to move the overlay.
+    top.addEventListener('pointerdown', startOverlayDrag);
 
     els.list = h('div', 'list');
     els.panel.append(top, els.list, els.edgeTools);
@@ -2233,6 +2254,10 @@
           peek = isBox() ? false : !v;
           update();
         }
+      }
+      if (ch.overlayCollapsed) {
+        overlayCollapsed = !!ch.overlayCollapsed.newValue;
+        update(true);
       }
       if (ch.windowNames) {
         windowNames = ch.windowNames.newValue || {};
