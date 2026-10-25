@@ -28,14 +28,16 @@
     const horizontal = () => el.dataset.pos === 'below' || el.dataset.pos === 'above';
     const label = (n) => n && typeof n.title === 'string' && n.title.trim()
       ? n.title
-      : (n && n.url ? 'Untitled bookmark' : 'Folder');
+      : (n && n.url ? '' : 'Folder');
 
     // ----- pieces -----
     function icon(n) {
       const s = h('span', 'fav');
       const letter = () => {
-        s.textContent = (label(n).trim().charAt(0) || '•').toUpperCase();
-        s.classList.add('letter');
+        // Keep the icon slot, but do not add a text glyph for an unnamed bookmark.
+        const first = (label(n).trim().charAt(0) || '').toUpperCase();
+        s.textContent = first;
+        if (first) s.classList.add('letter');
       };
       if (!n.url) {
         const ns = 'http://www.w3.org/2000/svg';
@@ -206,7 +208,7 @@
         b.type = 'button';
         b.appendChild(icon(n));
         b.addEventListener('mousedown', (e) => e.preventDefault());
-        b.addEventListener('mouseenter', () => env.tip(b.getBoundingClientRect(), label(n), n.url || '', side));
+        b.addEventListener('mouseenter', () => env.tip(b.getBoundingClientRect(), label(n), label(n) ? (n.url || '') : '', side));
         b.addEventListener('mouseleave', () => env.hideTip());
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {

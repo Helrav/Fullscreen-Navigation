@@ -476,11 +476,17 @@
     } else clearOpen();
   }
 
+  function hasBlockingPopup() {
+    // Covers every modal currently used by the extension, including future
+    // dialogs that use the shared backdrop/card/prompt classes.
+    return !!(ui && ui.querySelector('.backdrop, .card, .prompt'));
+  }
+
   function scheduleClose() {
     if (closeTimer) return;
     closeTimer = setTimeout(() => {
       closeTimer = 0;
-      if (hoverPanel || lastInZone || nearResizeTarget() || pinned || resizing || hotZoneEditMode || dragIds || (contextMenu && contextMenu.isOpen())) return;
+      if (hoverPanel || lastInZone || nearResizeTarget() || pinned || resizing || hotZoneEditMode || dragIds || hasBlockingPopup() || (contextMenu && contextMenu.isOpen())) return;
       if (root && root.activeElement === els.search) return;
       if (isBox()) return;
       closePeek();
@@ -1094,6 +1100,7 @@
   let renamePrompt = null;
   function openSettingsCard() {
     if (settingsCard) return;
+    clearClose();
     // Avoid stacking the live editor's page shield behind the settings modal.
     hotZoneEditMode = false;
     placeHint();
@@ -1134,6 +1141,7 @@
     settingsCard.card.remove();
     settingsCard = null;
     updateResizeBuffer();
+    if (peek && !pinned && !isBox()) scheduleClose();
   }
 
   function closePrompt() {
@@ -1141,11 +1149,12 @@
     renamePrompt.backdrop.remove();
     renamePrompt.prompt.remove();
     renamePrompt = null;
+    if (peek && !pinned && !isBox()) scheduleClose();
   }
 
   function promptText(title, value, callback) {
-    clearClose();
     closePrompt();
+    clearClose();
     const backdrop = h('div', 'backdrop');
     const prompt = h('div', 'prompt');
     const label = h('div', 'ptitle', title);
