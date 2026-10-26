@@ -17,6 +17,13 @@
       el = null; open = false; folderHoverMode = false;
       notifyClosedIfLast(wasOpen);
     }
+
+    function activateFolderHoverMode() {
+      if (open && el) folderHoverMode = true;
+    }
+    function isFolderHoverActive() {
+      return !!(folderHoverMode && open && el);
+    }
     function hideContext() {
       const wasOpen = contextOpen;
       if (contextEl) contextEl.remove();
@@ -179,9 +186,10 @@
       menuEl.style.left = (nx / u) + 'px'; menuEl.style.top = (ny / u) + 'px';
     }
 
-    function show(items, x, y, side) {
+    function show(items, x, y, side, preserveFolderHover = false) {
+      const keepFolderHover = folderHoverMode;
       hide();
-      folderHoverMode = false;
+      folderHoverMode = !!(preserveFolderHover && keepFolderHover);
       if (!items.length) return;
       el = build(items, 'menu', 'main'); ui.appendChild(el); open = true;
       if (env.onOpen) env.onOpen();
@@ -196,6 +204,9 @@
     }
     function showBeside(items, rect, side) {
       show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side);
+    }
+    function switchFolderBeside(items, rect, side) {
+      show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side, true);
     }
     function showContextBeside(items, rect, side) {
       showContext(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side);
@@ -214,6 +225,6 @@
       const folderTrigger = target && target.closest && target.closest('.bm-folder-menu-trigger');
       if (isOpen() && !insideMenu && !folderTrigger) hide();
     }, true);
-    return { show, showBeside, showContext, showContextBeside, hide, closeLatest, isOpen };
+    return { show, showBeside, switchFolderBeside, activateFolderHoverMode, isFolderHoverActive, showContext, showContextBeside, hide, closeLatest, isOpen };
   };
 })();

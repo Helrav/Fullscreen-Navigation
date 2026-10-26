@@ -2323,7 +2323,27 @@
       clearOpen();
       if (peek && !pinned && !hoverPanel) scheduleClose();
     });
+    function isFullscreenMode() {
+      if (document.fullscreenElement) return true;
+      const screenWidth = window.screen && Number(window.screen.width);
+      const screenHeight = window.screen && Number(window.screen.height);
+      return Number.isFinite(screenWidth) && Number.isFinite(screenHeight) &&
+        screenWidth > 0 && screenHeight > 0 &&
+        window.outerWidth >= screenWidth - 2 && window.outerHeight >= screenHeight - 2;
+    }
+    let fullscreenModeWasActive = isFullscreenMode();
+    function syncFullscreenNavigation() {
+      const active = isFullscreenMode();
+      if (fullscreenModeWasActive && !active) {
+        // Leaving browser fullscreen should reset all bookmark menu layers
+        // and all in-place expanded folders, without requiring another click.
+        if (bookmarks && bookmarks.closeNavigation) bookmarks.closeNavigation();
+        hideTip();
+      }
+      fullscreenModeWasActive = active;
+    }
     window.addEventListener('resize', () => {
+      syncFullscreenNavigation();
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(async () => {
         await refreshEnv();
@@ -2333,8 +2353,8 @@
         if (shown) update(true);
       }, 120);
     });
-    window.addEventListener('pageshow', (e) => { if (e.persisted) { refreshEnv(); update(true); } });
-    document.addEventListener('fullscreenchange', () => update());
+    window.addEventListener('pageshow', (e) => { if (e.persisted) { refreshEnv(); update(true); syncFullscreenNavigation(); } });
+    document.addEventListener('fullscreenchange', () => { syncFullscreenNavigation(); update(); });
     document.addEventListener('visibilitychange', () => {
       if (dead) return;
       if (document.visibilityState === 'visible') refreshEnv();

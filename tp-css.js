@@ -288,7 +288,7 @@ globalThis.TPX.CSS = `
 .msep{height:1px;margin:4px 2px;background:var(--line)}
 
 /* ---------- hover name popup ---------- */
-.tip{position:fixed;zoom:var(--u,1);z-index:30;display:none;pointer-events:none;max-width:340px;padding:6px 10px;border-radius:8px;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 8px 24px rgba(0,0,0,.3)}
+.tip{position:fixed;zoom:var(--u,1);z-index:2147483002;display:none;pointer-events:none;max-width:340px;padding:6px 10px;border-radius:8px;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 8px 24px rgba(0,0,0,.3)}
 .tip .t1{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tip .t2{margin-top:1px;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 

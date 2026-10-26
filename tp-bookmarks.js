@@ -142,6 +142,21 @@
       openFolderMenuId = id;
       env.hideTip();
       env.menu.showBeside(toItems(n.children), button.getBoundingClientRect(), side);
+      // Clicking a root folder is the first intentional step into folder
+      // navigation. From this point on, hovering another root folder switches
+      // immediately, just like hovering another sibling inside the menu.
+      if (env.menu.activateFolderHoverMode) env.menu.activateFolderHoverMode();
+    }
+
+    function hoverSwitchFolderMenu(n, button, side) {
+      if (!env.menu.isFolderHoverActive || !env.menu.isFolderHoverActive()) return;
+      const id = String(n.id);
+      if (openFolderMenuId === id) return;
+      openFolderMenuId = id;
+      env.hideTip();
+      const rect = button.getBoundingClientRect();
+      if (env.menu.switchFolderBeside) env.menu.switchFolderBeside(toItems(n.children), rect, side);
+      else env.menu.showBeside(toItems(n.children), rect, side);
     }
 
 
@@ -240,9 +255,11 @@
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.classList.add('bm-folder-menu-trigger');
+          const side = el.dataset.pos === 'above' ? 'above' : 'below';
+          b.addEventListener('mouseenter', () => hoverSwitchFolderMenu(n, b, side));
           b.addEventListener('click', (e) => {
             if (e.ctrlKey || e.metaKey) { e.preventDefault(); openFolderInBackground(n); return; }
-            toggleFolderMenu(n, b, el.dataset.pos === 'above' ? 'above' : 'below');
+            toggleFolderMenu(n, b, side);
           });
           b.addEventListener('auxclick', (e) => {
             if (e.button === 1) { e.preventDefault(); openFolderInBackground(n); }
@@ -315,6 +332,7 @@
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.classList.add('bm-folder-menu-trigger');
+          b.addEventListener('mouseenter', () => hoverSwitchFolderMenu(n, b, side));
           b.addEventListener('click', (e) => {
             if (e.ctrlKey || e.metaKey) { e.preventDefault(); openFolderInBackground(n); return; }
             toggleFolderMenu(n, b, side);
@@ -566,6 +584,13 @@
         const menuFolderOpen = openFolderMenuId !== null && env.menu.isOpen();
         const inPlaceFolderOpen = s.bookmarksMode === 'card' && !horizontal() && openIds.size > 0;
         return !!s.bookmarks && (menuFolderOpen || inPlaceFolderOpen);
+      },
+      closeNavigation() {
+        openFolderMenuId = null;
+        openIds.clear();
+        env.menu.hide();
+        if (env.hideTip) env.hideTip();
+        renderContent();
       },
       refresh() { failed = false; data = null; lastKey = ''; if (env.settings().bookmarks) load(); }
     };
