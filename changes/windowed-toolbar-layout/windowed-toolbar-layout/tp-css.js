@@ -107,17 +107,17 @@ globalThis.TPX.CSS = `
 /* Settings is attached to the overlay itself, not the header/settings dialog. */
 .edge-tools{position:absolute;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:auto}
 .edge-tools:empty{display:none}
-.panel.default-toolbar-placement[data-dir=v] .edge-tools{left:50%;right:auto;bottom:8px;top:auto;transform:translateX(-50%)}
-.panel.default-toolbar-placement[data-dir=h] .edge-tools{right:8px;left:auto;top:50%;bottom:auto;transform:translateY(-50%)}
-.panel.default-toolbar-placement[data-dir=v] .list{padding-bottom:44px}
-.panel.default-toolbar-placement[data-dir=h] .list{padding-right:44px}
+.panel.default-toolbar-placement[data-dir=v]:not(.inline-edge-tools) .edge-tools{left:50%;right:auto;bottom:8px;top:auto;transform:translateX(-50%)}
+.panel.default-toolbar-placement[data-dir=h]:not(.inline-edge-tools) .edge-tools{right:8px;left:auto;top:50%;bottom:auto;transform:translateY(-50%)}
+.panel.default-toolbar-placement[data-dir=v]:not(.inline-edge-tools) .list{padding-bottom:44px}
+.panel.default-toolbar-placement[data-dir=h]:not(.inline-edge-tools) .list{padding-right:44px}
 .panel[data-dir=v].compact .edge-tools .toolbar-item,.panel[data-dir=h].compact .edge-tools .toolbar-item{width:22px;height:22px}
 .searchrow{display:flex;flex:1 1 140px;min-width:0;align-items:center;gap:6px}
 .searchrow.nosearch{flex:0 0 28px}
 .searchwrap{flex:1 1 110px;min-width:0;height:28px;position:relative}
-.panel[data-dir=h] .searchrow{flex:1 1 0}
+.panel[data-dir=h] .searchrow{flex:0 0 auto}
 .panel[data-dir=h] .searchrow.nosearch{flex:0 0 28px}
-.panel[data-dir=h] .searchwrap{flex:1 1 170px;width:170px}
+.panel[data-dir=h] .searchwrap{flex:0 0 88px;width:88px;min-width:88px;max-width:88px}
 .field{display:block;width:100%;height:100%;border:0;background:transparent;border-radius:8px}
 .search{width:100%;height:100%;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--hover);color:inherit;font:inherit;outline:none}
 .search{padding-right:30px}
