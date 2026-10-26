@@ -1,12 +1,11 @@
-Fix: Floating bookmark edge docking layout
+Latest fix: bookmark placement drag and docking
 
-- Dragging the floating bookmark header/handle can attach bookmarks to the top or bottom of the windowed overlay as a compact horizontal bookmark bar.
-- The preview shows translucent placeholders for both the bookmark bar and the overlay's destination geometry; the live overlay is hidden during the drag so the preview remains clear.
-- Top attachment offsets the overlay downward by the bar height; bottom attachment offsets it upward, keeping the two surfaces adjacent instead of overlapping.
-- Top/bottom docking reserves screen space even while moving or resizing the floating overlay; the panel height is constrained so a bottom bar never extends past the viewport.
-- Left/right attachment remains available and does not reserve vertical space.
-- Edge detection measures distance to the actual panel-edge segments and prefers top/bottom at corner ties, so dragging the drawer header vertically can reach horizontal docking more naturally.
-- Added a grip to the horizontal bar so it can be dragged back to a side.
-- Hiding bookmarks or changing the attachment edge reverses/recalculates the reserved offset without accumulating movement.
-- Updated README usage notes.
-- Included a full copy of all 18 current root extension files; only content.js, defaults.js, README.md, tp-bookmarks.js, and tp-css.js differ. Backup and previous Changes folders are excluded.
+- Reused the existing latest-fix directory instead of adding a new sibling fix; removed the older duplicate fix directory.
+- Enabled dragging from the bookmark header in vertical docked sidebars as well as Windowed overlays.
+- In icon-only mode, centered the expand/collapse button and added a separated divider/grip below it as the drag target.
+- During a drag, the bookmark drawer and overlay become a bookmark-shaped icon that follows the pointer, with the page shielded to prevent the prohibited/stop cursor.
+- Translucent previews show both the bookmark bar and the panel destination.
+- Top/bottom docking on a vertical docked sidebar converts bookmarks to a horizontal bar and shortens the sidebar to reserve space; left/right drops return to the usual adjacent drawer without adding vertical spacing.
+- Horizontal bars have a grip so they can be dragged back beside the overlay.
+- Preserved floating-window offset behavior and constrained panel height so a bottom bar stays within the viewport.
+- Included every current root extension file in the nested folder; content.js, defaults.js, README.md, tp-bookmarks.js, and tp-css.js are the modified copies. Backup is excluded.

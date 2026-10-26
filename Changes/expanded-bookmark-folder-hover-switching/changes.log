@@ -1,6 +1,0 @@
-Fix: Expanded bookmark folder hover switching
-
-- Added hover-switch handling to folders in the expanded/named bookmark card.
-- After a folder popup is open, hovering another top-level folder now switches the popup immediately and closes the previously opened folder popup, matching icon-strip and horizontal-bar behavior.
-- Existing sibling-folder hover switching inside folder popups is unchanged.
-- Included a complete copy of the current extension files in this fix folder; only tp-bookmarks.js differs from the current root extension. Backup and prior Changes folders are excluded.

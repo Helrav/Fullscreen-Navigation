@@ -471,4 +471,35 @@ globalThis.TPX.CSS = `
 .bm-dock-preview-panel[data-edge=bottom]{border-bottom-left-radius:0;border-bottom-right-radius:0}
 .bm-dock-preview-panel[data-edge=left]{border-top-left-radius:0;border-bottom-left-radius:0}
 .bm-dock-preview-panel[data-edge=right]{border-top-right-radius:0;border-bottom-right-radius:0}
+
+/* A top/bottom bookmark bar shares the docked sidebar's column without overlapping it. */
+.panel[data-style=docked][data-dir=v][data-edge=left].bookmarks-top,
+.panel[data-style=docked][data-dir=v][data-edge=right].bookmarks-top{top:36px}
+.panel[data-style=docked][data-dir=v][data-edge=left].bookmarks-bottom,
+.panel[data-style=docked][data-dir=v][data-edge=right].bookmarks-bottom{bottom:calc(var(--sbh,0px) + 36px)}
+
+/* The icon-only drawer keeps its expand button centered, then provides a separate drag strip. */
+.bm[data-view=strip] .bmstriphead{
+  width:100%;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  gap:2px;padding:4px 2px 0;border:0;text-align:center
+}
+.bm[data-view=strip] .bmstriphead .bmmode{align-self:center;margin:2px auto;padding:0}
+.bm[data-view=strip] .bm-drag-handle-vertical{
+  width:100%;height:18px;flex:0 0 18px;border-top:1px solid var(--line);border-radius:0;
+  justify-content:center;cursor:grab
+}
+.bm[data-view=strip] .bm-drag-handle-vertical svg{transform:rotate(90deg);width:18px;height:12px}
+.bm[data-pos=left][data-mode=card] .bmhead,
+.bm[data-pos=right][data-mode=card] .bmhead,
+.bm[data-pos^=floating-][data-mode=floating] .bmhead{cursor:grab;user-select:none;touch-action:none}
+.bmhead:active,.bm-drag-handle:active{cursor:grabbing}
+
+/* The shield owns the pointer during a bookmark drag, removing the browser's prohibited cursor. */
+.bm-drag-shield{position:fixed;inset:0;z-index:8;display:none;pointer-events:auto;background:transparent;cursor:grabbing;touch-action:none;user-select:none}
+.bm-drag-preview{
+  position:fixed;z-index:10;display:none;place-items:center;width:38px;height:38px;
+  transform:translate(-50%,-50%);border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);color:var(--accent);box-shadow:0 5px 18px rgba(0,0,0,.32);pointer-events:none
+}
+.bm-drag-preview svg{width:23px;height:23px;fill:currentColor}
 `;

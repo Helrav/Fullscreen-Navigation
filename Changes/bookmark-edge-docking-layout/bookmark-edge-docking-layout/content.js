@@ -519,7 +519,7 @@
     if (closeTimer) return;
     closeTimer = setTimeout(() => {
       closeTimer = 0;
-      if (keepPeekOpenAfterEscape || hoverPanel || lastInZone || nearResizeTarget() || nearPanelEdge() || pinned || resizing || hotZoneEditMode || dragIds || hasBlockingPopup() || (contextMenu && contextMenu.isOpen()) || (bookmarks && bookmarks.hasOpenFolders && bookmarks.hasOpenFolders())) return;
+      if (keepPeekOpenAfterEscape || hoverPanel || lastInZone || nearResizeTarget() || nearPanelEdge() || pinned || resizing || hotZoneEditMode || dragIds || (els.panel && els.panel.classList.contains('dragging-overlay')) || hasBlockingPopup() || (contextMenu && contextMenu.isOpen()) || (bookmarks && bookmarks.hasOpenFolders && bookmarks.hasOpenFolders())) return;
       if (root && root.activeElement === els.search) return;
       if (isBox()) return;
       closePeek();
@@ -1654,8 +1654,12 @@
     els.panel.classList.toggle('hidden', !vis);
     syncOverlayCollapsedState();
     els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks));
-    if (!(vis && isBox() && settings.bookmarks)) {
-      for (const cls of ['bookmarks-left', 'bookmarks-top', 'bookmarks-bottom']) els.panel.classList.remove(cls);
+    const bookmarkEdge = settings.floatingBookmarksEdge || 'auto';
+    const attachedBookmarksEdge = vis && settings.bookmarks
+      && (isBox() || (isVertical() && ['top', 'bottom'].includes(bookmarkEdge)));
+    for (const cls of ['bookmarks-left', 'bookmarks-top', 'bookmarks-bottom']) els.panel.classList.remove(cls);
+    if (attachedBookmarksEdge && ['left', 'top', 'bottom'].includes(bookmarkEdge)) {
+      els.panel.classList.add('bookmarks-' + bookmarkEdge);
     }
     updateResizeBuffer();
     if (ui) ui.dataset.theme = settings.theme;
@@ -2129,6 +2133,8 @@
       panelRect: () => els.panel.getBoundingClientRect(),
       placement: () => ({ left: 'right', right: 'left', top: 'below', bottom: 'above' })[settings.edge],
       floating: () => isBox(),
+      vertical: () => isVertical(),
+      onBookmarkDragEnd: () => { if (peek && !pinned) scheduleClose(); },
       vw,
       vh,
       setFloatingSide: (side) => {
