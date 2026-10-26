@@ -120,7 +120,7 @@
         return s;
       }
       if (X.favicons) {
-        X.favicons.mount(s, n.url, '', label(n), { serviceFirst: true, emptyFallback: !label(n) });
+        X.favicons.mount(s, n.url, '', label(n), { serviceFirst: true, emptyFallback: !label(n), lazy: true });
       } else letter();
       return s;
     }
@@ -141,7 +141,7 @@
       return nodes.map((n) => (n.children
         ? {
             label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n),
-            sub: toItems(n.children), clickSub: true,
+            lazySub: () => toItems(n.children), clickSub: true,
             modifiedAction: () => openFolderInBackground(n),
             onContext: (e) => showContextMenu(e, n)
           }
@@ -198,8 +198,6 @@
         const result = await env.send({ type: 'bookmarkAction', op, ...values });
         if (result && result.ok && refreshAfter) {
           failed = false;
-          data = null;
-          lastKey = '';
           load();
         }
       };
@@ -733,14 +731,25 @@
       if (!previewing && env.setFloatingSide) env.setFloatingSide(s.bookmarks ? dockedEdge : null);
     }
 
+    let treeSig = '', reloadQueued = false;
     async function load() {
-      if (loading) return;
+      if (loading) { reloadQueued = true; return; }
       loading = true;
       const r = await env.send({ type: 'bmTree' });
       loading = false;
-      if (r) { data = r; failed = false; } else failed = true;
-      lastKey = '';
+      let changed = true;
+      if (r) {
+        let sig = '';
+        try { sig = JSON.stringify(r); } catch (_) {}
+        changed = !data || !sig || sig !== treeSig;
+        treeSig = sig;
+        data = r; failed = false;
+      } else if (!data) failed = true;
+      // Only rebuild the bookmark UI when the tree really changed; keeping the
+      // old data meanwhile avoids the "Loading..." flash on every refresh.
+      if (changed) lastKey = '';
       update();
+      if (reloadQueued) { reloadQueued = false; load(); }
     }
 
     function update() {
@@ -785,7 +794,7 @@
         if (env.hideTip) env.hideTip();
         renderContent();
       },
-      refresh() { failed = false; data = null; lastKey = ''; if (env.settings().bookmarks) load(); }
+      refresh() { failed = false; if (env.settings().bookmarks) load(); else { data = null; treeSig = ''; lastKey = ''; } }
     };
   };
 })();

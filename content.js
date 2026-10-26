@@ -633,7 +633,7 @@
       port = api.runtime.connect({ name: 'tabs' });
       const mine = port;
       port.onMessage.addListener((m) => {
-        if (m && m.type === 'tabs') { data = m; render(); if (bookmarks) bookmarks.update(); }
+        if (m && m.type === 'tabs') { applyTabData(m); if (bookmarks) bookmarks.update(); }
         else if (m && m.type === 'bm' && bookmarks) bookmarks.refresh();
         else if (m && m.type === 'windowState') {
           if (applyFullscreenState(!!m.fullscreen)) update();
@@ -653,9 +653,22 @@
     try { p.disconnect(); } catch (e) {}
   }
 
+  // The background re-sends tab data several times after each navigation (to
+  // catch late favicon updates). Skip the full re-render when nothing visible
+  // changed, which removes most icon/tab flicker.
+  let lastTabSig = '';
+  function applyTabData(m) {
+    let sig = '';
+    try { sig = JSON.stringify([m.cur, m.groups, m.windows]); } catch (_) {}
+    data = m;
+    if (sig && sig === lastTabSig) return;
+    lastTabSig = sig;
+    render();
+  }
+
   async function refreshTabs() {
     const r = await send({ type: 'tabs' });
-    if (r && r.windows) { data = r; render(); }
+    if (r && r.windows) applyTabData(r);
   }
 
   function setFilter(v) {
@@ -672,7 +685,7 @@
 
   function fillFav(el, t) {
     if (globalThis.TPX && globalThis.TPX.favicons) {
-      globalThis.TPX.favicons.mount(el, t.url || '', t.favIconUrl || '', t.title || t.url || '?');
+      globalThis.TPX.favicons.mount(el, t.url || '', t.favIconUrl || '', t.title || t.url || '?', { slot: 't' + t.id });
       return;
     }
     el.textContent = ((t.title || '?').trim().charAt(0) || '•').toUpperCase();

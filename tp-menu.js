@@ -76,14 +76,22 @@
 
     function build(items, cls, owner) {
       const box = h('div', cls);
-      const dismiss = owner === 'context' ? hideContext : hideMain;
       box.style.pointerEvents = 'auto';
       box.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
-      if (!items.some((i) => i.sub)) box.classList.add('scroll');
+      fill(box, items, owner);
+      return box;
+    }
+
+    // Fills a menu box with rows. Folder submenus are built lazily (the first
+    // time they are opened) via `lazySub`, so opening a big bookmarks folder no
+    // longer builds every nested folder's rows and icons up front.
+    function fill(box, items, owner) {
+      const dismiss = owner === 'context' ? hideContext : hideMain;
+      if (!items.some((i) => i.sub || i.lazySub)) box.classList.add('scroll');
       for (const it of items) {
         if (it.sep) { box.appendChild(h('div', 'msep')); continue; }
         const row = h('div', 'mi' + (it.disabled ? ' dis' : '') +
-          (it.danger ? ' danger' : '') + (it.sub ? ' has-sub' : '') +
+          (it.danger ? ' danger' : '') + ((it.sub || it.lazySub) ? ' has-sub' : '') +
           (it.clickSub ? ' click-sub' : ''));
         if (it.tooltip && it.tooltip.title && typeof env.tip === 'function') {
           row.addEventListener('mouseenter', () => {
@@ -106,11 +114,24 @@
         if (it.shortcut) row.appendChild(h('span', 'mshortcut', it.shortcut));
         if (it.checked) row.appendChild(h('span', 'mchk', '✓'));
 
-        if (it.sub) {
+        if (it.sub || it.lazySub) {
           row.appendChild(h('span', 'marrow', '›'));
-          const sm = build(it.sub, 'submenu', owner);
+          let sm;
+          let ensureBuilt = () => {};
+          if (it.lazySub) {
+            sm = h('div', 'submenu');
+            sm.style.pointerEvents = 'auto';
+            sm.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
+            let built = false;
+            ensureBuilt = () => {
+              if (built) return;
+              built = true;
+              fill(sm, it.lazySub(), owner);
+            };
+          } else sm = build(it.sub, 'submenu', owner);
           row.appendChild(sm);
           const positionSubmenu = () => {
+            ensureBuilt();
             sm.classList.remove('flip');
             sm.style.top = '';
             sm.style.display = 'block';
@@ -178,7 +199,6 @@
         row.addEventListener('mousedown', (e) => e.preventDefault());
         box.appendChild(row);
       }
-      return box;
     }
 
     function place(menuEl, x, y, side) {
