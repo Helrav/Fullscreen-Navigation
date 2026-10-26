@@ -160,6 +160,15 @@
           }));
     }
 
+    function showFolderMenuBeside(items, rect, side, preserveFolderHover = false) {
+      if (horizontal() && env.menu.showBesideAutoVertical) {
+        env.menu.showBesideAutoVertical(items, rect, side, preserveFolderHover);
+        return;
+      }
+      if (preserveFolderHover && env.menu.switchFolderBeside) env.menu.switchFolderBeside(items, rect, side);
+      else env.menu.showBeside(items, rect, side);
+    }
+
     function toggleFolderMenu(n, button, side) {
       const id = String(n.id);
       if (env.menu.isOpen() && openFolderMenuId === id) {
@@ -169,7 +178,7 @@
       }
       openFolderMenuId = id;
       env.hideTip();
-      env.menu.showBeside(toItems(n.children, true), button.getBoundingClientRect(), side);
+      showFolderMenuBeside(toItems(n.children, true), button.getBoundingClientRect(), side);
       // Clicking a root folder is the first intentional step into folder
       // navigation. From this point on, hovering another root folder switches
       // immediately, just like hovering another sibling inside the menu.
@@ -183,8 +192,7 @@
       openFolderMenuId = id;
       env.hideTip();
       const rect = button.getBoundingClientRect();
-      if (env.menu.switchFolderBeside) env.menu.switchFolderBeside(toItems(n.children, true), rect, side);
-      else env.menu.showBeside(toItems(n.children, true), rect, side);
+      showFolderMenuBeside(toItems(n.children, true), rect, side, true);
     }
 
 
@@ -290,7 +298,7 @@
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.classList.add('bm-folder-menu-trigger');
-          const side = (el.dataset.pos === 'above' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
+          const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
           b.addEventListener('mouseenter', () => hoverSwitchFolderMenu(n, b, side));
           b.addEventListener('click', (e) => {
             if (e.ctrlKey || e.metaKey) { e.preventDefault(); openFolderInBackground(n); return; }
