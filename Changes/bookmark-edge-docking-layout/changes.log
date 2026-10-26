@@ -1,12 +1,11 @@
-Latest fix: bookmark placement drag and docking
+Latest fix: bookmark placement drag and viewport-edge docking
 
-- Reused the existing latest-fix directory and removed the older duplicate fix directory.
-- Preserved the previously working expanded-bookmark hover-switch behavior: after a folder popup is open, hovering another top-level folder switches to it immediately.
-- Enabled dragging from the bookmark header in vertical docked sidebars as well as Windowed overlays.
-- In icon-only mode, centered the expand/collapse button and added a separated divider/grip below it as the drag target.
-- During a drag, the bookmark drawer and overlay become a bookmark-shaped icon that follows the pointer, with the page shielded to prevent the prohibited/stop cursor.
-- Translucent previews show both the bookmark bar and the panel destination.
-- Top/bottom docking on a vertical docked sidebar converts bookmarks to a horizontal bar and shortens the sidebar to reserve space; left/right drops return to the usual adjacent drawer without adding vertical spacing.
-- Horizontal bars have a grip so they can be dragged back beside the overlay.
-- Preserved floating-window offset behavior and constrained panel height so a bottom bar stays within the viewport.
-- Included every current root extension file in the nested folder; content.js, defaults.js, README.md, tp-bookmarks.js, and tp-css.js are the modified copies. Backup is excluded.
+- Repaired bookmark dragging without hiding, fading, moving, resizing, or restyling the actual Tab Peek overlay while a bookmark drag is in progress.
+- Removed the added grip button from horizontal bookmark bars; drag the bar itself. Icon-only mode keeps the expand/collapse button centered and uses only the plain divider below it as the drag surface.
+- Fixed Windowed-mode edge detection so top/bottom are detected against the browser viewport, not the floating panel's horizontal position.
+- Top/bottom bookmark bars span the entire viewport width and sit flush against the browser edge.
+- Windowed mode never reserves space by shifting or shrinking the overlay. Existing saved offsets from the previous behavior are cleared and reversed once.
+- Only top/bottom placement on a vertical docked sidebar reserves 36px by shortening the sidebar; left/right placement remains adjacent to the overlay.
+- The translucent preview shows the full-width bookmark bar; the panel destination preview is shown only when a docked vertical sidebar actually needs to shorten.
+- Kept the existing expanded-bookmark hover-switch behavior.
+- Included every current root extension file in the nested folder; content.js, defaults.js, README.md, tp-bookmarks.js, and tp-css.js are the modified copies. Backup remains excluded.

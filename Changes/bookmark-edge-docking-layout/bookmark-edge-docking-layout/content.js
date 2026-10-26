@@ -210,7 +210,6 @@
   const isVertical = () => settings.edge === 'left' || settings.edge === 'right';
   const isBox = () => settings.style === 'windowed';
   const FLOATING_BOOKMARK_BAR_HEIGHT = 36;
-  const floatingBookmarkOffsetForEdge = (edge) => edge === 'top' ? FLOATING_BOOKMARK_BAR_HEIGHT : (edge === 'bottom' ? -FLOATING_BOOKMARK_BAR_HEIGHT : 0);
   const allowed = () => (!settings.onlyFullscreen || fullscreen) && !document.fullscreenElement;
   const wantVisible = () => allowed() && (isBox() ? pinned : (pinned || peek));
   const modOk = () => settings.triggerKey === 'none' || !!mods[settings.triggerKey];
@@ -1400,38 +1399,19 @@
     return settings.winRect;
   }
 
-  // A floating top/bottom bookmark bar uses space inside the same visual
-  // group. Store the applied offset so changing edges (or hiding bookmarks)
-  // moves the panel by only the difference, rather than repeatedly nudging it.
+  // Clear the offset used by the previous implementation. Windowed bookmarks
+  // now sit on the viewport edge and never reserve space by moving the overlay.
   function syncFloatingBookmarkLayout() {
-    const edge = settings.floatingBookmarksEdge || 'auto';
-    const desired = isBox() && settings.bookmarks ? floatingBookmarkOffsetForEdge(edge) : 0;
     const stored = settings.floatingBookmarksDockOffset;
     const current = Number.isFinite(stored) ? stored : 0;
-    let changed = !Number.isFinite(stored) || Math.abs(desired - current) > 0.1;
-
-    if (Math.abs(desired - current) > 0.1) {
-      let rect = settings.winRect;
-      if (!rect && isBox()) rect = ensureWindowRect();
-      if (rect) {
-        const ph = vh() / u;
-        const oldY = rect.y;
-        // Reserve 36px for the bar inside the viewport. Shrink an unusually
-        // tall floating panel only when there is physically no room for both.
-        if (desired !== 0 && rect.h > ph - FLOATING_BOOKMARK_BAR_HEIGHT) {
-          rect.h = Math.max(80, ph - FLOATING_BOOKMARK_BAR_HEIGHT);
-          changed = true;
-        }
-        const minY = desired > 0 ? FLOATING_BOOKMARK_BAR_HEIGHT : 0;
-        const maxY = ph - rect.h - (desired < 0 ? FLOATING_BOOKMARK_BAR_HEIGHT : 0);
-        const nextY = tpClamp(oldY + desired - current, minY, Math.max(minY, maxY));
-        if (Math.abs(nextY - oldY) > 0.1) {
-          rect.y = nextY;
-          changed = true;
-        }
-      }
+    const changed = !Number.isFinite(stored) || Math.abs(current) > 0.1;
+    if (Math.abs(current) > 0.1 && settings.winRect) {
+      const rect = settings.winRect;
+      const ph = vh() / u;
+      rect.y = tpClamp(rect.y - current, 0, Math.max(0, ph - rect.h));
+      settings.winRect = rect;
     }
-    settings.floatingBookmarksDockOffset = desired;
+    settings.floatingBookmarksDockOffset = 0;
     return changed;
   }
 
@@ -1547,15 +1527,9 @@
       const pw = vw() / u, ph = vh() / u;
       const rect = ensureWindowRect();
       const w = tpClamp(rect.w, 52, Math.max(52, pw - 12));
-      const hasTopBookmarkBar = !!(s.bookmarks && s.floatingBookmarksEdge === 'top');
-      const hasBottomBookmarkBar = !!(s.bookmarks && s.floatingBookmarksEdge === 'bottom');
-      const hasHorizontalBookmarkBar = hasTopBookmarkBar || hasBottomBookmarkBar;
-      const maxPanelHeight = Math.max(80, ph - (hasHorizontalBookmarkBar ? FLOATING_BOOKMARK_BAR_HEIGHT : 12));
-      const hh = tpClamp(rect.h, 80, maxPanelHeight);
+      const hh = tpClamp(rect.h, 80, Math.max(80, ph - 12));
       const x = tpClamp(rect.x, 0, Math.max(0, pw - w));
-      const minY = hasTopBookmarkBar ? FLOATING_BOOKMARK_BAR_HEIGHT : 0;
-      const maxY = ph - hh - (hasBottomBookmarkBar ? FLOATING_BOOKMARK_BAR_HEIGHT : 0);
-      const y = tpClamp(rect.y, minY, Math.max(minY, maxY));
+      const y = tpClamp(rect.y, 0, Math.max(0, ph - hh));
       settings.winRect = { x, y, w, h: hh };
       for (const [key, value] of [['--bx', x], ['--by', y], ['--bw', w], ['--bh', hh]]) hostEl.style.setProperty(key, value + 'px');
     }
@@ -1653,10 +1627,11 @@
     shown = vis;
     els.panel.classList.toggle('hidden', !vis);
     syncOverlayCollapsedState();
-    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && isBox() && settings.bookmarks));
     const bookmarkEdge = settings.floatingBookmarksEdge || 'auto';
+    const windowedSideBookmarks = isBox() && !['top', 'bottom'].includes(bookmarkEdge);
+    els.panel.classList.toggle('with-floating-bookmarks', !!(vis && settings.bookmarks && windowedSideBookmarks));
     const attachedBookmarksEdge = vis && settings.bookmarks
-      && (isBox() || (isVertical() && ['top', 'bottom'].includes(bookmarkEdge)));
+      && (windowedSideBookmarks || (!isBox() && isVertical() && ['top', 'bottom'].includes(bookmarkEdge)));
     for (const cls of ['bookmarks-left', 'bookmarks-top', 'bookmarks-bottom']) els.panel.classList.remove(cls);
     if (attachedBookmarksEdge && ['left', 'top', 'bottom'].includes(bookmarkEdge)) {
       els.panel.classList.add('bookmarks-' + bookmarkEdge);
@@ -2134,7 +2109,6 @@
       placement: () => ({ left: 'right', right: 'left', top: 'below', bottom: 'above' })[settings.edge],
       floating: () => isBox(),
       vertical: () => isVertical(),
-      onBookmarkDragEnd: () => { if (peek && !pinned) scheduleClose(); },
       vw,
       vh,
       setFloatingSide: (side) => {

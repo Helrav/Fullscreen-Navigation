@@ -95,27 +95,6 @@
       return btn;
     }
 
-    function makeBookmarkDragHandle(extraClass = '') {
-      const handle = h('div', ('bm-drag-handle ' + extraClass).trim());
-      handle.title = 'Drag to reposition bookmarks';
-      handle.setAttribute('aria-label', 'Drag to reposition bookmarks');
-      const ns = 'http://www.w3.org/2000/svg';
-      const grip = document.createElementNS(ns, 'svg');
-      grip.setAttribute('viewBox', '0 0 18 24');
-      grip.setAttribute('aria-hidden', 'true');
-      for (const y of [6, 12, 18]) {
-        for (const x of [6, 12]) {
-          const dot = document.createElementNS(ns, 'circle');
-          dot.setAttribute('cx', String(x));
-          dot.setAttribute('cy', String(y));
-          dot.setAttribute('r', '1.5');
-          grip.appendChild(dot);
-        }
-      }
-      handle.appendChild(grip);
-      return handle;
-    }
-
     // ----- pieces -----
     function icon(n) {
       const s = h('span', 'fav');
@@ -288,9 +267,8 @@
         && (el.dataset.pos === 'above' || el.dataset.pos === 'below')
         && ['top', 'bottom'].includes(env.settings().floatingBookmarksEdge);
       if (floatingHorizontal || dockedHorizontal) {
-        const handle = makeBookmarkDragHandle();
-        handle.addEventListener('pointerdown', startBookmarkPlacementDrag);
-        bar.appendChild(handle);
+        bar.classList.add('bm-placement-drag-surface');
+        bar.addEventListener('pointerdown', (e) => startBookmarkPlacementDrag(e, true));
       }
       const row = h('div', 'bmrow');
       const items = [];
@@ -356,8 +334,11 @@
     function renderStrip() {
       const modeButton = makeModeToggle('card');
       const head = h('div', 'bmhead bmstriphead');
-      head.title = 'Drag the divider below the expand button to reposition bookmarks';
-      head.append(modeButton, makeBookmarkDragHandle('bm-drag-handle-vertical'));
+      const divider = h('div', 'bm-strip-divider');
+      divider.title = 'Drag the divider below the expand button to reposition bookmarks';
+      divider.setAttribute('aria-label', 'Drag to reposition bookmarks');
+      divider.addEventListener('pointerdown', startBookmarkPlacementDrag);
+      head.append(modeButton, divider);
       head.addEventListener('pointerdown', startBookmarkPlacementDrag);
       const list = h('div', 'bmstrip');
       const pos = el.dataset.pos || '';
@@ -473,15 +454,6 @@
       };
     }
 
-    function floatingOffsetForEdge(edge) {
-      return edge === 'top' ? BAR_H : (edge === 'bottom' ? -BAR_H : 0);
-    }
-
-    function appliedFloatingOffset() {
-      const offset = env.settings().floatingBookmarksDockOffset;
-      return Number.isFinite(offset) ? offset : 0;
-    }
-
     function activeDockedBookmarkEdge() {
       const edge = env.settings().floatingBookmarksEdge || 'auto';
       return isVerticalDocked() && env.settings().bookmarks && ['top', 'bottom'].includes(edge)
@@ -491,10 +463,6 @@
 
     function basePanelRect(rect) {
       const u = env.u();
-      if (env.floating && env.floating()) {
-        const shift = appliedFloatingOffset() * u;
-        return { ...rect, top: rect.top - shift, bottom: rect.bottom - shift };
-      }
       const edge = activeDockedBookmarkEdge();
       if (edge === 'top') return { ...rect, top: rect.top - BAR_H * u, height: rect.height + BAR_H * u };
       if (edge === 'bottom') return { ...rect, bottom: rect.bottom + BAR_H * u, height: rect.height + BAR_H * u };
@@ -503,15 +471,8 @@
 
     function shiftedPanelRect(baseRect, edge) {
       const u = env.u();
-      if (env.floating && env.floating()) {
-        const shift = floatingOffsetForEdge(edge) * u;
-        const height = baseRect.height;
-        const viewportH = (typeof env.vh === 'function' ? env.vh() : window.innerHeight);
-        const minTop = edge === 'top' ? BAR_H * u : 0;
-        const maxTop = viewportH - height - (edge === 'bottom' ? BAR_H * u : 0);
-        const top = tpClamp(baseRect.top + shift, minTop, Math.max(minTop, maxTop));
-        return { ...baseRect, top, bottom: top + height };
-      }
+      // Windowed mode is an overlay: bookmarks never move or resize it.
+      if (env.floating && env.floating()) return { ...baseRect };
       if (isVerticalDocked() && edge === 'top') {
         return { ...baseRect, top: baseRect.top + BAR_H * u, height: Math.max(1, baseRect.height - BAR_H * u) };
       }
@@ -540,17 +501,24 @@
     function resolveRequestedFloatingEdge(preferred, rect) {
       const base = basePanelRect(rect);
       if (!['left', 'right', 'top', 'bottom'].includes(preferred)) return resolveFloatingEdge(null, floatingSpaces(base));
+      // Top/bottom are browser-viewport destinations in Windowed mode, not spaces around the panel.
+      if (env.floating && env.floating() && (preferred === 'top' || preferred === 'bottom')) return preferred;
       if (isVerticalDocked()) return preferred;
       return resolveFloatingEdge(preferred, floatingSpaces(shiftedPanelRect(base, preferred)));
     }
 
     function nearestFloatingEdge(x, y) {
+      // Top/bottom are detected at the browser viewport edges, regardless of
+      // where the Windowed overlay is placed horizontally.
+      const viewportH = typeof env.vh === 'function' ? env.vh() : window.innerHeight;
+      const edgeZone = 48;
+      if (y <= edgeZone) return 'top';
+      if (y >= viewportH - edgeZone) return 'bottom';
+
+      // Elsewhere, bookmarks remain adjacent to either side of the overlay.
       const r = basePanelRect(env.panelRect());
       const edgeY = Math.max(r.top, Math.min(r.bottom, y));
-      const edgeX = Math.max(r.left, Math.min(r.right, x));
       return [
-        ['top', Math.hypot(y - r.top, x - edgeX)],
-        ['bottom', Math.hypot(y - r.bottom, x - edgeX)],
         ['left', Math.hypot(x - r.left, y - edgeY)],
         ['right', Math.hypot(x - r.right, y - edgeY)]
       ].sort((a, b) => a[1] - b[1])[0][0];
@@ -573,48 +541,58 @@
     }
 
     function showFloatingDragPreview(edge, panelRect, bookmarkSize) {
-      floatingPreviewPanel.dataset.edge = edge;
-      positionPreviewBox(floatingPreviewPanel, panelRect.left, panelRect.top, panelRect.width, panelRect.height);
+      const floating = !!(env.floating && env.floating());
+      const showDockedPanelDestination = !floating && isVerticalDocked() && (edge === 'top' || edge === 'bottom');
+      if (showDockedPanelDestination) {
+        floatingPreviewPanel.dataset.edge = edge;
+        positionPreviewBox(floatingPreviewPanel, panelRect.left, panelRect.top, panelRect.width, panelRect.height);
+      } else {
+        floatingPreviewPanel.style.display = 'none';
+        floatingPreviewPanel.removeAttribute('data-edge');
+      }
 
       floatingPreviewBookmarks.dataset.edge = edge;
       if (edge === 'left') {
         positionPreviewBox(floatingPreviewBookmarks, panelRect.left - bookmarkSize * env.u(), panelRect.top, bookmarkSize * env.u(), panelRect.height);
       } else if (edge === 'right') {
         positionPreviewBox(floatingPreviewBookmarks, panelRect.right, panelRect.top, bookmarkSize * env.u(), panelRect.height);
-      } else if (edge === 'top') {
-        positionPreviewBox(floatingPreviewBookmarks, panelRect.left, panelRect.top - bookmarkSize * env.u(), panelRect.width, bookmarkSize * env.u());
       } else {
-        positionPreviewBox(floatingPreviewBookmarks, panelRect.left, panelRect.bottom, panelRect.width, bookmarkSize * env.u());
+        const viewportW = typeof env.vw === 'function' ? env.vw() : window.innerWidth;
+        const viewportH = typeof env.vh === 'function' ? env.vh() : window.innerHeight;
+        const top = edge === 'top' ? 0 : viewportH - bookmarkSize * env.u();
+        positionPreviewBox(floatingPreviewBookmarks, 0, top, viewportW, bookmarkSize * env.u());
       }
     }
 
     function moveBookmarkDragVisuals(ev, visible) {
-      const panel = ui.querySelector('.panel');
+      // Hide only the drawer being dragged; never modify the actual overlay.
       if (visible) {
         el.classList.add('dragging-placement');
-        if (panel) panel.classList.add('dragging-overlay');
         dragShield.style.display = 'block';
         dragPreview.style.display = 'grid';
         dragPreview.style.left = ev.clientX + 'px';
         dragPreview.style.top = ev.clientY + 'px';
       } else {
         el.classList.remove('dragging-placement');
-        if (panel) panel.classList.remove('dragging-overlay');
         dragShield.style.display = 'none';
         dragPreview.style.display = 'none';
       }
     }
 
-    function startBookmarkPlacementDrag(e) {
-      if (e.button !== 0 || (e.target.closest && e.target.closest('button'))) return;
+    function startBookmarkPlacementDrag(e, allowButtons = false) {
+      if (e.button !== 0) return;
+      const startedOnButton = !!(e.target.closest && e.target.closest('button'));
+      if (startedOnButton && !allowButtons) return;
       if (!(env.floating && env.floating()) && !(env.vertical && env.vertical())) return;
-      e.preventDefault();
+      // Preserve a bookmark click if the pointer does not move into a drag.
+      if (!startedOnButton) e.preventDefault();
       e.stopPropagation();
       let moved = false;
       const startX = e.clientX, startY = e.clientY;
       const move = (ev) => {
         if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;
         moved = true;
+        if (ev.cancelable) ev.preventDefault();
         moveBookmarkDragVisuals(ev, true);
         const next = nearestFloatingEdge(ev.clientX, ev.clientY);
         if (next !== floatingPreviewEdge) {
@@ -637,7 +615,6 @@
           moveBookmarkDragVisuals(ev, false);
           hideFloatingDragPreview();
           place();
-          if (env.onBookmarkDragEnd) env.onBookmarkDragEnd();
           return;
         }
         let edge = resolveRequestedFloatingEdge(nearestFloatingEdge(ev.clientX, ev.clientY), env.panelRect());
@@ -647,7 +624,6 @@
         hideFloatingDragPreview();
         if (env.setFloatingBookmarkEdge) env.setFloatingBookmarkEdge(edge);
         else place();
-        if (env.onBookmarkDragEnd) env.onBookmarkDragEnd();
       };
       window.addEventListener('pointermove', move, true);
       window.addEventListener('pointerup', finish, true);
@@ -665,12 +641,13 @@
         const storedEdge = s.floatingBookmarksEdge || 'auto';
         const requestedEdge = floatingPreviewEdge || storedEdge;
         const edge = resolveRequestedFloatingEdge(requestedEdge, actualRect);
-        const r = floatingPreviewEdge !== null ? shiftedPanelRect(basePanelRect(actualRect), edge) : actualRect;
+        const r = floatingPreviewEdge !== null ? basePanelRect(actualRect) : actualRect;
         const spaces = floatingSpaces(r);
-        const preferredSize = edge === 'top' || edge === 'bottom'
+        const horizontalEdge = edge === 'top' || edge === 'bottom';
+        const preferredSize = horizontalEdge
           ? BAR_H
           : (s.bookmarksMode === 'strip' ? STRIP_W : FLOATING_BOOKMARK_MAX);
-        const sideSize = Math.max(1, Math.min(preferredSize, spaces[edge]));
+        const sideSize = horizontalEdge ? BAR_H : Math.max(1, Math.min(preferredSize, spaces[edge]));
         el.dataset.pos = 'floating-' + edge;
         el.dataset.mode = 'floating';
         st.right = 'auto';
@@ -684,12 +661,14 @@
           st.left = ((edge === 'right' ? r.right : r.left) / u) + 'px';
           st.transform = edge === 'right' ? '' : 'translateX(-100%)';
         } else {
+          const viewportW = typeof env.vw === 'function' ? env.vw() : window.innerWidth;
+          const viewportH = (typeof env.vh === 'function' ? env.vh() : window.innerHeight) / u;
           el.style.removeProperty('--bm-floating-width');
           el.style.setProperty('--bm-floating-height', sideSize + 'px');
-          st.left = (r.left / u) + 'px';
-          st.width = (r.width / u) + 'px';
+          st.left = '0px';
+          st.width = (viewportW / u) + 'px';
           st.height = sideSize + 'px';
-          st.top = (edge === 'top' ? r.top / u - sideSize : r.bottom / u) + 'px';
+          st.top = (edge === 'top' ? 0 : Math.max(0, viewportH - sideSize)) + 'px';
           st.transform = '';
         }
         if (floatingPreviewEdge !== null) {
@@ -699,11 +678,9 @@
           el.classList.remove('dragging-placement');
           hideFloatingDragPreview();
         }
-        if (env.setFloatingSide) {
-          const activeSide = floatingPreviewEdge !== null
-            ? resolveRequestedFloatingEdge(storedEdge, actualRect)
-            : edge;
-          env.setFloatingSide(s.bookmarks ? activeSide : null);
+        // Never alter the overlay's classes during a bookmark drag.
+        if (floatingPreviewEdge === null && env.setFloatingSide) {
+          env.setFloatingSide(s.bookmarks && (edge === 'left' || edge === 'right') ? edge : null);
         }
         return;
       }
@@ -730,8 +707,9 @@
         st.left = ((pos === 'right' ? r.right : r.left) / u) + 'px';
         st.transform = pos === 'right' ? '' : 'translateX(-100%)';
       } else {
-        st.left = (r.left / u) + 'px';
-        st.width = (r.width / u) + 'px';
+        const viewportW = typeof env.vw === 'function' ? env.vw() : window.innerWidth;
+        st.left = horizontalEdge ? '0px' : (r.left / u) + 'px';
+        st.width = horizontalEdge ? (viewportW / u) + 'px' : (r.width / u) + 'px';
         st.height = 'auto';
         st.top = ((pos === 'below' ? r.bottom : r.top) / u) + 'px';
         st.transform = pos === 'below' ? '' : 'translateY(-100%)';
@@ -746,7 +724,7 @@
         el.classList.remove('dragging-placement');
         hideFloatingDragPreview();
       }
-      if (env.setFloatingSide) env.setFloatingSide(s.bookmarks ? dockedEdge : null);
+      if (!previewing && env.setFloatingSide) env.setFloatingSide(s.bookmarks ? dockedEdge : null);
     }
 
     async function load() {

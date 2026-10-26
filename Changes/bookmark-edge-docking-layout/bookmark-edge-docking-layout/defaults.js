@@ -30,7 +30,7 @@ const TP_DEFAULTS = {
   bookmarks: false,
   bookmarksMode: 'card',     // card | strip (left/right overlays)
   floatingBookmarksEdge: 'auto', // auto | left | right | top | bottom when floating
-  floatingBookmarksDockOffset: null // internal vertical offset reserved for a floating top/bottom bookmark bar
+  floatingBookmarksDockOffset: 0 // legacy compatibility only; windowed bookmarks no longer offset the overlay
 };
 
 const tpClamp = (v, a, b) => Math.min(b, Math.max(a, v));

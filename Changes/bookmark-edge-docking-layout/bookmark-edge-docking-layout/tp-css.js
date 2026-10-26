@@ -352,7 +352,7 @@ globalThis.TPX.CSS = `
 .bmhead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 12px;border-bottom:1px solid var(--line);font-weight:600}
 .bmmode{display:grid;flex:none;place-items:center;width:28px;min-width:28px;padding:0}
 .bm-mode-toggle svg{display:block;width:18px;height:18px;fill:currentColor}
-.bm[data-pos^=floating-][data-view=strip] .bmstriphead .bm-mode-toggle{width:28px;height:28px;min-width:28px;margin:2px;padding:0}
+.bm[data-pos^=floating-][data-view=strip] .bmstriphead .bm-mode-toggle{width:auto;height:24px;min-width:0;max-width:100%;margin:2px;padding:0 9px;font-size:12px}
 .bm[data-mode=strip] .bmmode{margin:6px 4px;padding:0}
 .bmlist{flex:1;min-height:0;overflow:auto;padding:4px;scrollbar-width:auto}
 .bmr{display:flex;align-items:center;gap:8px;min-height:28px;padding:3px 8px;border-radius:6px;cursor:pointer}
@@ -451,14 +451,9 @@ globalThis.TPX.CSS = `
 .bm[data-pos=floating-bottom][data-mode=floating] .bmc{border-top:0;border-radius:0 0 14px 14px}
 .bm[data-pos=floating-top][data-mode=floating] .bmbar,
 .bm[data-pos=floating-bottom][data-mode=floating] .bmbar{min-width:0}
-.bm-drag-handle{
-  flex:0 0 22px;display:grid;place-items:center;align-self:center;width:22px;height:28px;
-  color:var(--muted);border-radius:5px;cursor:grab;touch-action:none;user-select:none
-}
-.bm-drag-handle:hover{background:var(--hover);color:var(--fg)}
-.bm-drag-handle:active{cursor:grabbing}
-.bm-drag-handle svg{display:block;width:12px;height:18px;fill:currentColor}
 .bm.dragging-placement{visibility:hidden!important}
+.bm-placement-drag-surface{cursor:grab;user-select:none;touch-action:none}
+.bm-placement-drag-surface:active{cursor:grabbing}
 .bm-dock-preview{
   position:fixed;z-index:9;display:none;pointer-events:none;zoom:var(--u,1);
   border:1px dashed color-mix(in srgb,var(--accent) 92%,transparent);
@@ -483,16 +478,17 @@ globalThis.TPX.CSS = `
   width:100%;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   gap:2px;padding:4px 2px 0;border:0;text-align:center
 }
-.bm[data-view=strip] .bmstriphead .bmmode{align-self:center;margin:2px auto;padding:0}
-.bm[data-view=strip] .bm-drag-handle-vertical{
-  width:100%;height:18px;flex:0 0 18px;border-top:1px solid var(--line);border-radius:0;
-  justify-content:center;cursor:grab
+.bm[data-view=strip] .bmstriphead .bm-mode-toggle{width:auto;height:24px;min-width:0;margin:2px auto;padding:0 9px}
+.bm[data-view=strip] .bm-strip-divider{
+  display:block;width:100%;height:18px;flex:0 0 18px;margin-top:2px;
+  box-sizing:border-box;border-top:1px solid var(--line);border-radius:0;
+  cursor:grab;touch-action:none;user-select:none
 }
-.bm[data-view=strip] .bm-drag-handle-vertical svg{transform:rotate(90deg);width:18px;height:12px}
+.bm[data-view=strip] .bm-strip-divider:active{cursor:grabbing}
 .bm[data-pos=left][data-mode=card] .bmhead,
 .bm[data-pos=right][data-mode=card] .bmhead,
 .bm[data-pos^=floating-][data-mode=floating] .bmhead{cursor:grab;user-select:none;touch-action:none}
-.bmhead:active,.bm-drag-handle:active{cursor:grabbing}
+.bmhead:active,.bm-placement-drag-surface:active,.bm-strip-divider:active{cursor:grabbing}
 
 /* The shield owns the pointer during a bookmark drag, removing the browser's prohibited cursor. */
 .bm-drag-shield{position:fixed;inset:0;z-index:8;display:none;pointer-events:auto;background:transparent;cursor:grabbing;touch-action:none;user-select:none}
