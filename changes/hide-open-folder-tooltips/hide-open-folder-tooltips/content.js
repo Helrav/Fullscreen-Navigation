@@ -1078,6 +1078,7 @@
     const reopen = await getReopenMenuItem();
     contextMenu.showContext([
       { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
+      { label: 'New window', shortcut: 'Ctrl+N', action: () => send({ type: 'newWindow' }) },
       reopen,
       { sep: true },
       { label: 'Settings', action: () => openSettingsCard() }
