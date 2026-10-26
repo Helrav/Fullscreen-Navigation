@@ -1,9 +1,8 @@
-Fix: suppress tooltips inside the currently open root bookmark folder
+Fix: overlay New window menu item and horizontal bookmark-folder navigation
 
-- Suppress the tooltip on the root folder itself while that exact root folder's popup is open.
-- Suppress tooltips on every nested folder inside the opened root folder hierarchy, at any depth.
-- Keep tooltip behavior for root folders outside the currently open folder hierarchy.
-- Preserve tooltips for bookmark pages/URLs, including leaf items inside the opened folder hierarchy.
-- Keep existing root-folder hover-switching behavior.
-- Renamed the existing nested improve-loads folder to hide-open-folder-tooltips; no duplicate fix folder was created.
-- The Test branch stores this tree as lowercase changes/, so the exact Git path is changes/hide-open-folder-tooltips/.
+- Add New window (Ctrl+N) to the overlay blank-space context menu, using the menu's existing right-aligned shortcut layout.
+- Add a background message handler that creates a new browser window.
+- Position horizontal bookmark-folder menus below top-positioned bookmark bars and above bottom-positioned bars; flip when the preferred side lacks more space.
+- Add a capture-phase click dismissal fallback for open menus when clicking outside the menu and folder triggers, without stopping the clicked control's own handler.
+- Preserve bookmark dragging, existing context-menu handlers, bookmark activation, and folder-trigger behavior.
+- The Test branch stores this working copy under lowercase changes/.
