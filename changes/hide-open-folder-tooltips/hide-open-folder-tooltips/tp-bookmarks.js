@@ -67,10 +67,18 @@
       if (pos === 'below' || pos === 'floating-bottom') return 'below';
       return 'right';
     }
+    function isOpenRootFolder(n) {
+      return !!(n && n.children && openFolderMenuId === String(n.id) && env.menu.isOpen());
+    }
+
     function attachBookmarkTooltip(target, n, preferredSide) {
       const tip = bookmarkTooltip(n);
       if (!tip.title || !env.tip) return;
       target.addEventListener('mouseenter', () => {
+        if (isOpenRootFolder(n)) {
+          if (env.hideTip) env.hideTip();
+          return;
+        }
         env.tip(target.getBoundingClientRect(), tip.title, tip.detail, preferredSide || bookmarkTooltipSide());
       });
       target.addEventListener('mouseleave', () => { if (env.hideTip) env.hideTip(); });
@@ -136,12 +144,12 @@
       env.send({ type: 'bookmarkAction', op: 'openFolder', id: n.id });
     }
 
-    function toItems(nodes) {
+    function toItems(nodes, suppressFolderTooltips = false) {
       if (!nodes.length) return [{ label: '(empty)', disabled: true }];
       return nodes.map((n) => (n.children
         ? {
-            label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n),
-            lazySub: () => toItems(n.children), clickSub: true,
+            label: label(n), tooltip: suppressFolderTooltips ? null : bookmarkTooltip(n), icon: () => icon(n),
+            lazySub: () => toItems(n.children, suppressFolderTooltips), clickSub: true,
             modifiedAction: () => openFolderInBackground(n),
             onContext: (e) => showContextMenu(e, n)
           }
@@ -161,7 +169,7 @@
       }
       openFolderMenuId = id;
       env.hideTip();
-      env.menu.showBeside(toItems(n.children), button.getBoundingClientRect(), side);
+      env.menu.showBeside(toItems(n.children, true), button.getBoundingClientRect(), side);
       // Clicking a root folder is the first intentional step into folder
       // navigation. From this point on, hovering another root folder switches
       // immediately, just like hovering another sibling inside the menu.
@@ -175,8 +183,8 @@
       openFolderMenuId = id;
       env.hideTip();
       const rect = button.getBoundingClientRect();
-      if (env.menu.switchFolderBeside) env.menu.switchFolderBeside(toItems(n.children), rect, side);
-      else env.menu.showBeside(toItems(n.children), rect, side);
+      if (env.menu.switchFolderBeside) env.menu.switchFolderBeside(toItems(n.children, true), rect, side);
+      else env.menu.showBeside(toItems(n.children, true), rect, side);
     }
 
 
@@ -350,6 +358,10 @@
         b.appendChild(icon(n));
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('mouseenter', () => {
+          if (isOpenRootFolder(n)) {
+            env.hideTip();
+            return;
+          }
           const title = label(n);
           const hoverText = title || n.url || '';
           if (hoverText) env.tip(b.getBoundingClientRect(), hoverText, title ? (n.url || '') : '', side);
