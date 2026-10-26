@@ -106,15 +106,23 @@
     toolbarOrder = order;
     if (!buttons[edgeToolId]) edgeToolId = 'settings';
 
-    // The edge slot is always active, including after customising the toolbar.
-    // The chosen icon occupies the real overlay edge; all others stay in the
-    // header in the user's stored order.
+    // Docked vertical overlays keep the chosen edge button in its edge slot.
+    // Windowed and horizontal layouts place it inline after the other two toolbar
+    // buttons, so it stays on the top bar rather than floating at the bottom/right.
     if (els.edgeTools) els.edgeTools.replaceChildren();
     const visibleOrder = order.filter((id) => id !== edgeToolId);
+    const inlineEdgeTool = isBox() || !isVertical();
     els.head.append(els.searchRow, ...visibleOrder.map((id) => buttons[id]));
-    if (els.edgeTools && buttons[edgeToolId]) els.edgeTools.appendChild(buttons[edgeToolId]);
+    if (inlineEdgeTool) {
+      if (buttons[edgeToolId]) els.head.appendChild(buttons[edgeToolId]);
+    } else if (els.edgeTools && buttons[edgeToolId]) {
+      els.edgeTools.appendChild(buttons[edgeToolId]);
+    }
     els.head.classList.add('default-toolbar-placement');
-    if (els.panel) els.panel.classList.add('default-toolbar-placement');
+    if (els.panel) {
+      els.panel.classList.add('default-toolbar-placement');
+      els.panel.classList.toggle('inline-edge-tools', inlineEdgeTool);
+    }
     if (persist) {
       try { api.storage.local.set({ toolbarOrder, edgeToolId }); } catch (_) {}
     }
@@ -1446,6 +1454,15 @@
     return isBox() && settings.winRect ? settings.winRect.w : settings.panelWidth;
   }
 
+  function minimumWindowedHeightUnits() {
+    const ph = vh() / u;
+    const screenH = Math.max(1, Number(window.screen && window.screen.height) || vh());
+    const requested = (screenH * 0.35) / u;
+    // Keep the minimum at 35% of screen height, except when the visible
+    // browser viewport physically cannot accommodate that height.
+    return Math.min(Math.max(80, requested), Math.max(80, ph - 12));
+  }
+
   function ensureWindowRect() {
     if (settings.winRect) return settings.winRect;
     const pw = vw() / u, ph = vh() / u;
@@ -1454,7 +1471,8 @@
     const screenW = Math.max(1, Number(window.screen && window.screen.width) || vw());
     const screenH = Math.max(1, Number(window.screen && window.screen.height) || vh());
     const w = tpClamp((screenW * 0.30) / u, 220, Math.max(220, pw - 24));
-    const h0 = tpClamp((screenH * 0.35) / u, 160, Math.max(160, ph - 24));
+    const minH = minimumWindowedHeightUnits();
+    const h0 = tpClamp((screenH * 0.35) / u, minH, Math.max(minH, ph - 24));
     const x = settings.edge === 'right' ? Math.max(12, pw - w - 12) : settings.edge === 'left' ? 12 : tpClamp((pw - w) / 2, 12, Math.max(12, pw - w - 12));
     const y = settings.edge === 'bottom' ? Math.max(12, ph - h0 - 12) : settings.edge === 'top' ? 12 : tpClamp((ph - h0) / 3, 12, Math.max(12, ph - h0 - 12));
     settings.winRect = { x, y, w, h: h0 };
@@ -1589,7 +1607,8 @@
       const pw = vw() / u, ph = vh() / u;
       const rect = ensureWindowRect();
       const w = tpClamp(rect.w, 52, Math.max(52, pw - 12));
-      const hh = tpClamp(rect.h, 80, Math.max(80, ph - 12));
+      const minH = minimumWindowedHeightUnits();
+      const hh = tpClamp(rect.h, minH, Math.max(minH, ph - 12));
       const x = tpClamp(rect.x, 0, Math.max(0, pw - w));
       const y = tpClamp(rect.y, 0, Math.max(0, ph - hh));
       settings.winRect = { x, y, w, h: hh };
@@ -1727,6 +1746,9 @@
     p.dataset.style = s.style;
     p.dataset.align = tpAlign(s);
     p.dataset.theme = s.theme;
+    // Reflow the edge button whenever switching between docked, horizontal,
+    // and Windowed layouts (including a drag that changes the overlay style).
+    applyToolbarOrder(false);
     hostEl.style.setProperty('--accent', s.accent);
     if (ui) ui.dataset.theme = s.theme;
     els.searchWrap.style.display = s.showSearch ? '' : 'none';
@@ -1763,7 +1785,7 @@
         }
       } else {
         let { l, t, r, b } = start;
-        const minW = 52 * u, minH = 80 * u, W = vw(), H = vh();
+        const minW = 52 * u, minH = minimumWindowedHeightUnits() * u, W = vw(), H = vh();
         if (handle.includes('e')) r = tpClamp(r + dx, l + minW, W);
         if (handle.includes('w')) l = tpClamp(l + dx, 0, r - minW);
         if (handle.includes('s')) b = tpClamp(b + dy, t + minH, H);
