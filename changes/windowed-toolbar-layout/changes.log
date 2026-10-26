@@ -1,7 +1,8 @@
-Fix: overflow-bookmark popup placement, screen-relative default window size, and precise edge docking
+Fix: toolbar placement for Windowed/horizontal overlays and minimum Windowed height
 
-- Make the horizontal bookmarks overflow (» / “More bookmarks”) popup use the same adaptive above/below placement as horizontal bookmark folders, including flipping when the preferred side has insufficient space.
-- Set the initial Windowed overlay size to 30% of screen width by 35% of screen height, accounting for browser zoom and only shrinking when the current viewport cannot fit the requested size.
-- Require the drag pointer itself to reach within 0.5% of the browser viewport edge before docking; apply this consistently when converting a docked overlay to Windowed mode and when moving an already-windowed overlay.
-- Keep existing saved Windowed dimensions intact; the new size applies when a Windowed rect is first created.
-- Changes are confined to the existing lowercase changes/ workspace on the Test branch.
+- Rename the existing working folder to changes/windowed-toolbar-layout/windowed-toolbar-layout/ before making feature changes; preserve all existing files and icon blobs.
+- Move whichever toolbar button occupies the vertical overlay's bottom edge slot inline to the right of the other two toolbar buttons in Windowed mode and horizontal docked mode.
+- Recalculate toolbar placement when the layout mode changes, including transitions into or out of Windowed mode and changes to the configured edge button.
+- Reduce the horizontal overlay's inline search field to 88 CSS pixels so the “Search” placeholder remains visible without the oversized field.
+- Enforce a minimum Windowed height of 35% of screen height in the initial geometry, normal geometry application, and interactive resizing; cap that minimum only if the browser viewport cannot fit it.
+- Keep existing toolbar order and the selected edge-button identity intact.
