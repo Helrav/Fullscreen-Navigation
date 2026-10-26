@@ -980,13 +980,13 @@
       items.push({ sep: true }, { label: 'Rename window…', action: () => promptText('Rename window', win?.name || '', (name) => send({ type: 'renameWindow', windowId: wid, name })) });
     }
     items.push({ sep: true }, { label: 'Close tab' + (multiple ? 's' : ''), danger: true, action: () => closeTabs(ids) });
-    contextMenu.show(items, x, y);
+    contextMenu.showContext(items, x, y);
   }
 
   function showGroupMenu(groupId, x, y) {
     const group = data.groups[groupId];
     if (!group || !contextMenu) return;
-    contextMenu.show([
+    contextMenu.showContext([
       { label: 'Color group', sub: GROUP_COLOR_NAMES.map((name) => ({ label: name[0].toUpperCase() + name.slice(1), dot: GROUP_COLORS[name], checked: group.color === name, action: () => send({ type: 'groupSet', groupId, color: name }) })) },
       { label: 'Rename group…', action: () => promptText('Rename group', group.title || '', (title) => send({ type: 'groupSet', groupId, title })) },
       { label: 'Ungroup tabs', action: async () => {
@@ -1013,7 +1013,7 @@
   async function showOverlayMenu(windowId, x, y) {
     if (!contextMenu) return;
     const reopen = await getReopenMenuItem();
-    contextMenu.show([
+    contextMenu.showContext([
       { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
       reopen,
       { sep: true },
@@ -1025,7 +1025,7 @@
     const win = (data.windows || []).find((item) => item.id === windowId);
     if (!win || !contextMenu) return;
     const reopen = await getReopenMenuItem();
-    contextMenu.show([
+    contextMenu.showContext([
       { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
       reopen,
       { label: 'Bookmark all tabs…', shortcut: 'Ctrl+Shift+D', disabled: !win.tabs.length, action: () => send({ type: 'tabop', op: 'bookmark', tabIds: win.tabs.map((tab) => tab.id) }) },
