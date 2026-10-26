@@ -67,10 +67,18 @@
       if (pos === 'below' || pos === 'floating-bottom') return 'below';
       return 'right';
     }
+    function isOpenRootFolder(n) {
+      return !!(n && n.children && openFolderMenuId === String(n.id) && env.menu.isOpen());
+    }
+
     function attachBookmarkTooltip(target, n, preferredSide) {
       const tip = bookmarkTooltip(n);
       if (!tip.title || !env.tip) return;
       target.addEventListener('mouseenter', () => {
+        if (isOpenRootFolder(n)) {
+          if (env.hideTip) env.hideTip();
+          return;
+        }
         env.tip(target.getBoundingClientRect(), tip.title, tip.detail, preferredSide || bookmarkTooltipSide());
       });
       target.addEventListener('mouseleave', () => { if (env.hideTip) env.hideTip(); });
@@ -136,12 +144,12 @@
       env.send({ type: 'bookmarkAction', op: 'openFolder', id: n.id });
     }
 
-    function toItems(nodes) {
+    function toItems(nodes, suppressFolderTooltips = false) {
       if (!nodes.length) return [{ label: '(empty)', disabled: true }];
       return nodes.map((n) => (n.children
         ? {
-            label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n),
-            lazySub: () => toItems(n.children), clickSub: true,
+            label: label(n), tooltip: suppressFolderTooltips ? null : bookmarkTooltip(n), icon: () => icon(n),
+            lazySub: () => toItems(n.children, suppressFolderTooltips), clickSub: true,
             modifiedAction: () => openFolderInBackground(n),
             onContext: (e) => showContextMenu(e, n)
           }
@@ -150,6 +158,15 @@
             action: (e) => openBm(n, e), keepOpenOnModified: true,
             onContext: (e) => showContextMenu(e, n)
           }));
+    }
+
+    function showFolderMenuBeside(items, rect, side, preserveFolderHover = false) {
+      if (horizontal() && env.menu.showBesideAutoVertical) {
+        env.menu.showBesideAutoVertical(items, rect, side, preserveFolderHover);
+        return;
+      }
+      if (preserveFolderHover && env.menu.switchFolderBeside) env.menu.switchFolderBeside(items, rect, side);
+      else env.menu.showBeside(items, rect, side);
     }
 
     function toggleFolderMenu(n, button, side) {
@@ -161,7 +178,7 @@
       }
       openFolderMenuId = id;
       env.hideTip();
-      env.menu.showBeside(toItems(n.children), button.getBoundingClientRect(), side);
+      showFolderMenuBeside(toItems(n.children, true), button.getBoundingClientRect(), side);
       // Clicking a root folder is the first intentional step into folder
       // navigation. From this point on, hovering another root folder switches
       // immediately, just like hovering another sibling inside the menu.
@@ -175,8 +192,7 @@
       openFolderMenuId = id;
       env.hideTip();
       const rect = button.getBoundingClientRect();
-      if (env.menu.switchFolderBeside) env.menu.switchFolderBeside(toItems(n.children), rect, side);
-      else env.menu.showBeside(toItems(n.children), rect, side);
+      showFolderMenuBeside(toItems(n.children, true), rect, side, true);
     }
 
 
@@ -282,7 +298,7 @@
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.classList.add('bm-folder-menu-trigger');
-          const side = (el.dataset.pos === 'above' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
+          const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
           b.addEventListener('mouseenter', () => hoverSwitchFolderMenu(n, b, side));
           b.addEventListener('click', (e) => {
             if (e.ctrlKey || e.metaKey) { e.preventDefault(); openFolderInBackground(n); return; }
@@ -318,7 +334,10 @@
         items.forEach((b, i) => { if (cut < 0 && b.offsetLeft + b.offsetWidth > w + 0.5) cut = i; });
         if (cut < 0) { more.style.display = 'none'; return; }
         for (let i = cut; i < items.length; i++) items[i].style.display = 'none';
-        more.onclick = () => env.menu.showBeside(toItems(data.bar.slice(cut)), more.getBoundingClientRect(), (el.dataset.pos === 'above' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below');
+        more.onclick = () => {
+          const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
+          showFolderMenuBeside(toItems(data.bar.slice(cut)), more.getBoundingClientRect(), side);
+        };
       };
       fitSoon();
     }
@@ -350,6 +369,10 @@
         b.appendChild(icon(n));
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('mouseenter', () => {
+          if (isOpenRootFolder(n)) {
+            env.hideTip();
+            return;
+          }
           const title = label(n);
           const hoverText = title || n.url || '';
           if (hoverText) env.tip(b.getBoundingClientRect(), hoverText, title ? (n.url || '') : '', side);

@@ -232,6 +232,20 @@
     function showBeside(items, rect, side) {
       show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side);
     }
+    function showBesideAutoVertical(items, rect, preferredSide, preserveFolderHover = false) {
+      const side = preferredSide === 'above' ? 'above' : 'below';
+      show(items, rect.left, side === 'below' ? rect.bottom : rect.top, side, preserveFolderHover);
+      if (!open || !el) return;
+      const menuRect = el.getBoundingClientRect();
+      const aboveSpace = Math.max(0, rect.top - 4);
+      const belowSpace = Math.max(0, env.vh() - rect.bottom - 4);
+      const preferredSpace = side === 'above' ? aboveSpace : belowSpace;
+      const oppositeSpace = side === 'above' ? belowSpace : aboveSpace;
+      if (menuRect.height > preferredSpace && oppositeSpace > preferredSpace) {
+        const flipped = side === 'above' ? 'below' : 'above';
+        place(el, rect.left, flipped === 'below' ? rect.bottom : rect.top, flipped);
+      }
+    }
     function switchFolderBeside(items, rect, side) {
       show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side, true);
     }
@@ -248,18 +262,24 @@
     window.addEventListener('mousedown', dismissOutside, true);
     window.addEventListener('pointerdown', dismissOutside, true);
     window.addEventListener('contextmenu', dismissOutside, true);
-    root.addEventListener('mousedown', (e) => {
+    const dismissOverlayMenuOutside = (e) => {
       const target = e.target;
       const insideMenu = target && target.closest && target.closest('.menu');
       const folderTrigger = target && target.closest && target.closest('.bm-folder-menu-trigger');
       if (isOpen() && !insideMenu && !folderTrigger) hide();
-    }, true);
+    };
+    root.addEventListener('mousedown', dismissOverlayMenuOutside, true);
+    // The horizontal bookmarks bar can receive clicks in places where its own
+    // handlers prevent the usual mouse sequence from dismissing the popup.
+    // Capture click as a second outside-dismiss path; menu rows and folder
+    // triggers remain exempt, and target handlers still run normally afterward.
+    root.addEventListener('click', dismissOverlayMenuOutside, true);
     // Right-clicking somewhere else inside the overlay closes an open context menu.
     root.addEventListener('contextmenu', (e) => {
       const target = e.target;
       const insideMenu = target && target.closest && target.closest('.menu');
       if (contextOpen && !insideMenu) hideContext();
     }, true);
-    return { show, showBeside, switchFolderBeside, activateFolderHoverMode, isFolderHoverActive, showContext, showContextBeside, hide, closeLatest, isOpen };
+    return { show, showBeside, showBesideAutoVertical, switchFolderBeside, activateFolderHoverMode, isFolderHoverActive, showContext, showContextBeside, hide, closeLatest, isOpen };
   };
 })();
