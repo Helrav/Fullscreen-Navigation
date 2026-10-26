@@ -352,7 +352,7 @@ globalThis.TPX.CSS = `
 .bmhead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 12px;border-bottom:1px solid var(--line);font-weight:600}
 .bmmode{display:grid;flex:none;place-items:center;width:28px;min-width:28px;padding:0}
 .bm-mode-toggle svg{display:block;width:18px;height:18px;fill:currentColor}
-.bm[data-pos^=floating-][data-view=strip] .bmstriphead .bm-mode-toggle{width:28px;height:28px;min-width:28px;margin:2px;padding:0}
+.bm[data-pos^=floating-][data-view=strip] .bmstriphead .bm-mode-toggle{width:34px;height:32px;min-width:0;max-width:100%;margin:2px auto;padding:0;border:0;border-radius:7px;background:transparent}
 .bm[data-mode=strip] .bmmode{margin:6px 4px;padding:0}
 .bmlist{flex:1;min-height:0;overflow:auto;padding:4px;scrollbar-width:auto}
 .bmr{display:flex;align-items:center;gap:8px;min-height:28px;padding:3px 8px;border-radius:6px;cursor:pointer}
@@ -440,4 +440,63 @@ globalThis.TPX.CSS = `
 .panel.overlay-collapsed[data-dir=h] .ghead{
   justify-content:center;
 }
+
+/* Floating bookmarks can dock above/below a windowed overlay as a horizontal bar. */
+.bm[data-pos=floating-top][data-mode=floating] .bmc,
+.bm[data-pos=floating-bottom][data-mode=floating] .bmc{
+  flex-direction:row;width:100%;height:36px;max-height:36px;align-self:stretch;flex:0 0 36px;
+  margin:0;border:1px solid var(--line);box-shadow:0 6px 20px rgba(0,0,0,.22);border-radius:0
+}
+.bm[data-pos=floating-top][data-mode=floating] .bmc{border-bottom:0;border-radius:14px 14px 0 0}
+.bm[data-pos=floating-bottom][data-mode=floating] .bmc{border-top:0;border-radius:0 0 14px 14px}
+.bm[data-pos=floating-top][data-mode=floating] .bmbar,
+.bm[data-pos=floating-bottom][data-mode=floating] .bmbar{min-width:0}
+.bm.dragging-placement{visibility:hidden!important}
+.bm-placement-drag-surface{cursor:grab;user-select:none;touch-action:none}
+.bm-placement-drag-surface:active{cursor:grabbing}
+.bm-dock-preview{
+  position:fixed;z-index:9;display:none;pointer-events:none;zoom:var(--u,1);
+  border:1px dashed color-mix(in srgb,var(--accent) 92%,transparent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 14%,transparent);
+}
+.bm-dock-preview-panel{border-radius:14px;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.bm-dock-preview-bookmarks{border-radius:5px;background:color-mix(in srgb,var(--accent) 20%,transparent)}
+.bm-dock-preview-panel[data-edge=top]{border-top-left-radius:0;border-top-right-radius:0}
+.bm-dock-preview-panel[data-edge=bottom]{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.bm-dock-preview-panel[data-edge=left]{border-top-left-radius:0;border-bottom-left-radius:0}
+.bm-dock-preview-panel[data-edge=right]{border-top-right-radius:0;border-bottom-right-radius:0}
+
+/* A top/bottom bookmark bar shares the docked sidebar's column without overlapping it. */
+.panel[data-style=docked][data-dir=v][data-edge=left].bookmarks-top,
+.panel[data-style=docked][data-dir=v][data-edge=right].bookmarks-top{top:36px}
+.panel[data-style=docked][data-dir=v][data-edge=left].bookmarks-bottom,
+.panel[data-style=docked][data-dir=v][data-edge=right].bookmarks-bottom{bottom:calc(var(--sbh,0px) + 36px)}
+
+/* The icon-only drawer keeps its expand button centered, then provides a separate drag strip. */
+.bm[data-view=strip] .bmstriphead{
+  width:100%;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  gap:2px;padding:4px 2px 0;border:0;text-align:center
+}
+.bm[data-view=strip] .bmstriphead .bm-mode-toggle{width:34px;height:32px;min-width:0;margin:2px auto;padding:0;border:0;border-radius:7px;background:transparent}
+.bm[data-view=strip] .bmstriphead .bm-mode-toggle:hover{background:var(--hover)}
+.bm[data-view=strip] .bm-strip-divider{
+  display:block;width:100%;height:18px;flex:0 0 18px;margin-top:2px;
+  box-sizing:border-box;border-top:1px solid var(--line);border-radius:0;
+  cursor:grab;touch-action:none;user-select:none
+}
+.bm[data-view=strip] .bm-strip-divider:active{cursor:grabbing}
+.bm[data-pos=left][data-mode=card] .bmhead,
+.bm[data-pos=right][data-mode=card] .bmhead,
+.bm[data-pos^=floating-][data-mode=floating] .bmhead{cursor:grab;user-select:none;touch-action:none}
+.bmhead:active,.bm-placement-drag-surface:active,.bm-strip-divider:active{cursor:grabbing}
+
+/* The shield owns the pointer during a bookmark drag, removing the browser's prohibited cursor. */
+.bm-drag-shield{position:fixed;inset:0;z-index:8;display:none;pointer-events:auto;background:transparent;cursor:grabbing;touch-action:none;user-select:none}
+.bm-drag-preview{
+  position:fixed;z-index:10;display:none;place-items:center;width:38px;height:38px;
+  transform:translate(-50%,-50%);border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);color:var(--accent);box-shadow:0 5px 18px rgba(0,0,0,.32);pointer-events:none
+}
+.bm-drag-preview svg{width:23px;height:23px;fill:currentColor}
 `;

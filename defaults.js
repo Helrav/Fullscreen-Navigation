@@ -29,7 +29,8 @@ const TP_DEFAULTS = {
   // Bookmarks
   bookmarks: false,
   bookmarksMode: 'card',     // card | strip (left/right overlays)
-  floatingBookmarksEdge: 'auto' // auto | left | right | top | bottom when floating
+  floatingBookmarksEdge: 'auto', // auto | left | right | top | bottom when floating
+  floatingBookmarksDockOffset: 0 // legacy compatibility only; windowed bookmarks no longer offset the overlay
 };
 
 const tpClamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -50,6 +51,7 @@ function tpNormalize(stored) {
   if (!['newtab', 'current'].includes(s.searchIn)) s.searchIn = 'newtab';
   if (!['card', 'strip'].includes(s.bookmarksMode)) s.bookmarksMode = 'card';
   if (!['auto', 'left', 'right', 'top', 'bottom'].includes(s.floatingBookmarksEdge)) s.floatingBookmarksEdge = 'auto';
+  if (![null, -36, 0, 36].includes(s.floatingBookmarksDockOffset)) s.floatingBookmarksDockOffset = null;
   s.undoSeconds = tpClamp(Number(s.undoSeconds) || 8, 2, 30);
   s.zoneLength = tpClamp(Number(s.zoneLength) || 40, 5, 100);
   s.zoneStart = tpClamp(Number(s.zoneStart) || 0, 0, 100 - s.zoneLength);
