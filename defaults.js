@@ -80,8 +80,15 @@ function tpPushAllowed(s, host) {
   return s.siteMode === 'exclusive' ? listed : !listed;
 }
 
-// Shared favicon loader for tabs and bookmarks. Browser favicons can appear
-// after the initial navigation event, so this helper supports delayed retries.
+// Shared favicon loader for tabs and bookmarks.
+//  - Working icon URLs are cached per site, so re-rendering a list (which happens
+//    on every tab update) paints the icon immediately instead of flashing a
+//    letter and then the image.
+//  - Identical lookups in flight are shared, so 200 bookmarks on one site cost
+//    one probe rather than 200.
+//  - Options: { lazy: true } waits until the element scrolls near view (used for
+//    long bookmark menus); { slot } remembers the last icon of a tab so a
+//    loading tab keeps its old icon instead of dropping to a letter.
 (() => {
   const X = (globalThis.TPX = globalThis.TPX || {});
   const api = globalThis.browser || globalThis.chrome;
@@ -95,6 +102,19 @@ function tpPushAllowed(s, host) {
   // icon selected for a newer URL on the same element.
   const states = new WeakMap();
   let nextToken = 1;
+
+  const good = new Map();       // cache key -> working icon URL
+  const bad = new Map();        // cache key -> time of last total failure
+  const inflight = new Map();   // cache key -> Promise<string|''>
+  const slots = new Map();      // slot id -> { origin, src }
+  const GOOD_MAX = 1500, BAD_TTL = 15000, LETTER_DELAY = 350;
+
+  const originOf = (pageUrl) => {
+    try {
+      const u = new URL(String(pageUrl || ''));
+      return (u.protocol === 'http:' || u.protocol === 'https:') ? u.origin : '';
+    } catch (_) { return ''; }
+  };
 
   function faviconServiceUrl(pageUrl) {
     if (!chromium || !api || !api.runtime || !api.runtime.getURL) return '';
@@ -133,38 +153,133 @@ function tpPushAllowed(s, host) {
     add(preferredUrl);
     if (!serviceFirst) add(serviceUrl);
 
-    // Browser-provided favicons can be unavailable on some browsers, so try
-    // conventional same-origin paths only after the actual icon sources.
-    let page;
-    try {
-      const parsed = new URL(String(pageUrl || ''));
-      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') page = parsed;
-    } catch (_) {}
-    if (page) {
-      for (const path of ['/favicon.ico', '/favicon.svg', '/favicon.png', '/favicon-32x32.png', '/apple-touch-icon.png']) {
-        add(page.origin + path);
-      }
+    // Same-origin guesses only as a last resort. Chromium's favicon service
+    // already answers for every http(s) page, so one guess is enough there;
+    // other browsers keep the longer list.
+    const origin = originOf(pageUrl);
+    if (origin) {
+      const paths = chromium
+        ? ['/favicon.ico']
+        : ['/favicon.ico', '/favicon.svg', '/favicon.png', '/favicon-32x32.png', '/apple-touch-icon.png'];
+      for (const path of paths) add(origin + path);
     }
     return list;
   }
 
+  // Resolve the first candidate that really decodes. Result is shared by every
+  // element asking for the same key.
+  function probe(list) {
+    return new Promise((resolve) => {
+      let index = 0;
+      const next = () => {
+        if (index >= list.length) { resolve(''); return; }
+        const src = list[index++];
+        const img = new Image();
+        img.decoding = 'async';
+        img.referrerPolicy = 'no-referrer';
+        img.onload = () => (img.naturalWidth && img.naturalHeight) ? resolve(src) : next();
+        img.onerror = next;
+        img.src = src;
+      };
+      next();
+    });
+  }
+
+  function resolveIcon(key, list) {
+    if (good.has(key)) return Promise.resolve(good.get(key));
+    if (!list.length) return Promise.resolve('');
+    const failedAt = bad.get(key);
+    if (failedAt && Date.now() - failedAt < BAD_TTL) return Promise.resolve('');
+    let p = inflight.get(key);
+    if (!p) {
+      p = probe(list).then((src) => {
+        inflight.delete(key);
+        if (src) {
+          if (good.size >= GOOD_MAX) good.delete(good.keys().next().value);
+          good.set(key, src);
+          bad.delete(key);
+        } else bad.set(key, Date.now());
+        return src;
+      });
+      inflight.set(key, p);
+    }
+    return p;
+  }
+
+  function makeImg(src) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.draggable = false;
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.src = src;
+    return img;
+  }
+
+  // One shared observer starts loading lazily-mounted icons once near view.
+  let io = null;
+  const pendingStart = new WeakMap();
+  function whenVisible(el, fn) {
+    if (typeof IntersectionObserver !== 'function') { fn(); return; }
+    if (!io) {
+      io = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          io.unobserve(entry.target);
+          const run = pendingStart.get(entry.target);
+          pendingStart.delete(entry.target);
+          if (run) run();
+        }
+      }, { rootMargin: '160px' });
+    }
+    pendingStart.set(el, fn);
+    io.observe(el);
+  }
+
   function mount(el, pageUrl, preferredUrl, label, options = {}) {
     if (!el) return;
-    const state = {
-      token: nextToken++,
-      key: String(pageUrl || '') + '\n' + String(preferredUrl || ''),
-      retries: 0,
-      success: false
-    };
+    const state = { token: nextToken++, retries: 0, success: false, timer: 0 };
     states.set(el, state);
     const isCurrent = () => states.get(el) === state;
-    const fallback = ((String(label || '').trim().charAt(0)) || (options.emptyFallback ? '' : '•')).toUpperCase();
-    if (fallback) {
-      el.textContent = fallback;
-      el.classList.add('letter');
+
+    const origin = originOf(pageUrl);
+    const serviceFirst = !!options.serviceFirst;
+    const key = (preferredUrl ? 'p|' + preferredUrl : 's|' + (origin || String(pageUrl || ''))) + (serviceFirst ? '|f' : '');
+    const fallbackChar = ((String(label || '').trim().charAt(0)) || (options.emptyFallback ? '' : '•')).toUpperCase();
+
+    const showLetter = () => {
+      if (!isCurrent() || state.success) return;
+      if (fallbackChar) { el.textContent = fallbackChar; el.classList.add('letter'); }
+      else { el.replaceChildren(); el.classList.remove('letter'); }
+    };
+    const showIcon = (src) => {
+      if (!isCurrent()) return;
+      state.success = true;
+      clearTimeout(state.timer);
+      el.classList.remove('letter');
+      el.replaceChildren(makeImg(src));
+      if (options.slot) slots.set(options.slot, { origin, src });
+    };
+
+    // 1) Known-good icon: paint it right now, no letter, no async gap.
+    let known = good.get(key);
+    // 2) Loading tab with no icon yet: keep what this tab showed before, if it
+    //    is the same site, instead of flashing a letter or a generic globe.
+    if (!known && options.slot && !preferredUrl) {
+      const prev = slots.get(options.slot);
+      if (prev && prev.origin && prev.origin === origin) known = prev.src;
+    }
+    if (known) {
+      el.classList.remove('letter');
+      el.replaceChildren(makeImg(known));
+      state.success = !!good.get(key);
+      if (state.success) return;
     } else {
+      // Leave the slot empty briefly; a letter only appears if loading is slow
+      // or fails, so fast icons never flash a letter first.
       el.replaceChildren();
       el.classList.remove('letter');
+      state.timer = setTimeout(showLetter, LETTER_DELAY);
     }
 
     const scheduleRetry = () => {
@@ -178,32 +293,18 @@ function tpPushAllowed(s, host) {
 
     const attempt = (retryOnly = false) => {
       if (!isCurrent() || state.success) return;
-      const list = candidates(pageUrl, preferredUrl, !!options.serviceFirst, retryOnly);
-      let index = 0;
-      const tryNext = () => {
+      const list = candidates(pageUrl, preferredUrl, serviceFirst, retryOnly);
+      if (retryOnly) bad.delete(key);
+      resolveIcon(key, list).then((src) => {
         if (!isCurrent() || state.success) return;
-        if (index >= list.length) { scheduleRetry(); return; }
-        const img = document.createElement('img');
-        img.alt = '';
-        img.draggable = false;
-        img.decoding = 'async';
-        img.referrerPolicy = 'no-referrer';
-        img.onload = () => {
-          if (!isCurrent() || state.success) return;
-          if (!img.naturalWidth || !img.naturalHeight) { tryNext(); return; }
-          state.success = true;
-          el.classList.remove('letter');
-          el.replaceChildren(img);
-        };
-        img.onerror = tryNext;
-        img.src = list[index++];
-      };
-      tryNext();
+        if (src) showIcon(src);
+        else { showLetter(); scheduleRetry(); }
+      });
     };
 
-    attempt(false);
+    if (options.lazy) whenVisible(el, () => { if (isCurrent()) attempt(false); });
+    else attempt(false);
   }
 
   X.favicons = { mount };
 })();
-
