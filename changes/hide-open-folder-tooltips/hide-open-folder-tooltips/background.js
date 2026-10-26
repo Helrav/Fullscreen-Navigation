@@ -629,6 +629,9 @@ async function handle(message, sender) {
       await api.tabs.create({ ...(Number.isInteger(targetWindowId) ? { windowId: targetWindowId } : {}) });
       return { ok: true };
     }
+    case 'newWindow':
+      await api.windows.create({});
+      return { ok: true };
     case 'closeWindow': {
       if (!Number.isInteger(message.windowId)) return { ok: false, reason: 'invalid-window' };
       await api.windows.remove(message.windowId);
