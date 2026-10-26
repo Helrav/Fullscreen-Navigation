@@ -334,7 +334,10 @@
         items.forEach((b, i) => { if (cut < 0 && b.offsetLeft + b.offsetWidth > w + 0.5) cut = i; });
         if (cut < 0) { more.style.display = 'none'; return; }
         for (let i = cut; i < items.length; i++) items[i].style.display = 'none';
-        more.onclick = () => env.menu.showBeside(toItems(data.bar.slice(cut)), more.getBoundingClientRect(), (el.dataset.pos === 'above' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below');
+        more.onclick = () => {
+          const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
+          showFolderMenuBeside(toItems(data.bar.slice(cut)), more.getBoundingClientRect(), side);
+        };
       };
       fitSoon();
     }
