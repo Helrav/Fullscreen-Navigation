@@ -415,6 +415,9 @@
         attachBookmarkTooltip(row, n);
         if (n.children) {
           row.classList.add('bm-folder-menu-trigger');
+          // Once a folder popup is open, hovering another top-level folder
+          // switches immediately, matching icon-strip and horizontal-bar mode.
+          row.addEventListener('mouseenter', () => hoverSwitchFolderMenu(n, row, side));
           row.addEventListener('click', (e) => {
             e.preventDefault(); e.stopPropagation();
             if (e.ctrlKey || e.metaKey) { openFolderInBackground(n); return; }

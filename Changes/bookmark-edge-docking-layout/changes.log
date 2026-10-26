@@ -1,6 +1,7 @@
 Latest fix: bookmark placement drag and docking
 
-- Reused the existing latest-fix directory instead of adding a new sibling fix; removed the older duplicate fix directory.
+- Reused the existing latest-fix directory and removed the older duplicate fix directory.
+- Preserved the previously working expanded-bookmark hover-switch behavior: after a folder popup is open, hovering another top-level folder switches to it immediately.
 - Enabled dragging from the bookmark header in vertical docked sidebars as well as Windowed overlays.
 - In icon-only mode, centered the expand/collapse button and added a separated divider/grip below it as the drag target.
 - During a drag, the bookmark drawer and overlay become a bookmark-shaped icon that follows the pointer, with the page shielded to prevent the prohibited/stop cursor.
