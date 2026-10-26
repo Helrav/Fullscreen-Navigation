@@ -1449,8 +1449,12 @@
   function ensureWindowRect() {
     if (settings.winRect) return settings.winRect;
     const pw = vw() / u, ph = vh() / u;
-    const w = tpClamp(settings.panelWidth || 360, 220, Math.max(220, pw - 24));
-    const h0 = tpClamp(Math.min(520, ph - 40), 160, Math.max(160, ph - 24));
+    // Base the initial window size on the screen dimensions rather than the
+    // current browser viewport; cap it only if the viewport cannot fit it.
+    const screenW = Math.max(1, Number(window.screen && window.screen.width) || vw());
+    const screenH = Math.max(1, Number(window.screen && window.screen.height) || vh());
+    const w = tpClamp((screenW * 0.30) / u, 220, Math.max(220, pw - 24));
+    const h0 = tpClamp((screenH * 0.35) / u, 160, Math.max(160, ph - 24));
     const x = settings.edge === 'right' ? Math.max(12, pw - w - 12) : settings.edge === 'left' ? 12 : tpClamp((pw - w) / 2, 12, Math.max(12, pw - w - 12));
     const y = settings.edge === 'bottom' ? Math.max(12, ph - h0 - 12) : settings.edge === 'top' ? 12 : tpClamp((ph - h0) / 3, 12, Math.max(12, ph - h0 - 12));
     settings.winRect = { x, y, w, h: h0 };
@@ -1796,6 +1800,22 @@
     else startDockDrag(e);
   }
 
+  // Dock only when the pointer itself reaches the outermost 0.5% of the viewport.
+  // Normalize distances by the relevant axis so corners resolve consistently.
+  function snapEdgeAtPointer(x, y) {
+    const width = vw(), height = vh();
+    const candidates = [
+      ['left', Math.max(0, x), width * 0.005],
+      ['right', Math.max(0, width - x), width * 0.005],
+      ['top', Math.max(0, y), height * 0.005],
+      ['bottom', Math.max(0, height - y), height * 0.005]
+    ].map(([edge, distance, limit]) => ({
+      edge,
+      ratio: distance / Math.max(1, limit)
+    })).sort((a, b) => a.ratio - b.ratio);
+    return candidates[0] && candidates[0].ratio <= 1 ? candidates[0].edge : null;
+  }
+
   function startDockDrag(e) {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -1824,13 +1844,7 @@
       return { x: xx, y: yy, w: dragW, h: dragH };
     };
     let current = { ...origin };
-    const edgeAt = (x, y) => {
-      const pad = 36;
-      const near = [
-        ['left', x], ['right', vw() - x], ['top', y], ['bottom', vh() - y]
-      ].sort((a, b) => a[1] - b[1]);
-      return near[0][1] <= pad ? near[0][0] : null;
-    };
+    const edgeAt = snapEdgeAtPointer;
     const showSnap = (edge) => {
       snapEdge = edge;
       if (!els.snap) return;
@@ -1910,16 +1924,7 @@
     const original = { x: rect.left / u, y: rect.top / u, w: rect.width / u, h: rect.height / u };
     let moved = false;
 
-    const snapEdgeAtCurrent = () => {
-      const r = els.panel.getBoundingClientRect();
-      const gaps = [
-        ['left', Math.max(0, r.left)],
-        ['right', Math.max(0, vw() - r.right)],
-        ['top', Math.max(0, r.top)],
-        ['bottom', Math.max(0, vh() - r.bottom)]
-      ].sort((a, b) => a[1] - b[1]);
-      return gaps[0][1] <= Math.max(36, Math.round(36 * u)) ? gaps[0][0] : null;
-    };
+
     const showSnap = (edge) => {
       if (!els.snap) return;
       if (!edge) { els.snap.style.display = 'none'; return; }
@@ -1962,10 +1967,10 @@
       }
       applyGeometry();
       if (bookmarks) bookmarks.update();
-      showSnap(snapEdgeAtCurrent());
+      showSnap(snapEdgeAtPointer(ev.clientX, ev.clientY));
     };
-    const up = () => {
-      const edge = moved ? snapEdgeAtCurrent() : null;
+    const up = (ev) => {
+      const edge = moved ? snapEdgeAtPointer(ev.clientX, ev.clientY) : null;
       cleanup();
       if (!moved) return;
       if (edge) {
