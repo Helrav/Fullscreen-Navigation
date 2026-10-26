@@ -5,6 +5,7 @@
   X.createMenu = (env) => {
     const { ui, root, h } = env;
     let el = null, open = false, contextEl = null, contextOpen = false;
+    let swallowedClickTarget = null, swallowedContextTarget = null;
     const isOpen = () => open || contextOpen;
 
     function notifyClosedIfLast(wasOpen) {
@@ -28,6 +29,71 @@
       if (contextEl) contextEl.remove();
       el = null; contextEl = null; open = false; contextOpen = false;
       notifyClosedIfLast(wasOpen);
+    }
+
+    // Escape dismisses only the topmost layer: first a context menu, then the
+    // deepest opened folder submenu, then the root folder menu. It never owns
+    // or closes the Tab Peek overlay itself.
+    function closeLatest() {
+      if (contextOpen) { hideContext(); return true; }
+      if (!open || !el) return false;
+      const opened = Array.from(el.querySelectorAll('.mi.open'));
+      if (opened.length) {
+        const latest = opened[opened.length - 1];
+        latest.classList.remove('open');
+        latest.querySelectorAll('.mi.open').forEach((row) => row.classList.remove('open'));
+        return true;
+      }
+      hideMain();
+      return true;
+    }
+
+    function eventPath(e) {
+      return typeof e.composedPath === 'function' ? e.composedPath() : [];
+    }
+    function isInside(menuEl, e) {
+      if (!menuEl) return false;
+      const path = eventPath(e);
+      return path.includes(menuEl) || (e.target && menuEl.contains(e.target));
+    }
+    function dismissContextOutside(e) {
+      if (!contextOpen || !contextEl || isInside(contextEl, e)) return;
+      const path = eventPath(e);
+      const inExtension = path.includes(root) || !!(root && root.contains && root.contains(e.target));
+      hideContext();
+      // A click on another extension control is dismiss-only: don't let that
+      // same press activate the item under the context menu.
+      if (inExtension) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (e.type === 'mousedown') swallowedClickTarget = e.target;
+        if (e.type === 'mousedown' && e.button === 2) swallowedContextTarget = e.target;
+      }
+    }
+    function swallowDismissedClick(e) {
+      if (!swallowedClickTarget) return;
+      const path = eventPath(e);
+      const inExtension = path.includes(root) || !!(root && root.contains && root.contains(e.target));
+      const sameTarget = e.target === swallowedClickTarget ||
+        (swallowedClickTarget && swallowedClickTarget.contains && swallowedClickTarget.contains(e.target)) ||
+        (e.target && e.target.contains && e.target.contains(swallowedClickTarget));
+      swallowedClickTarget = null;
+      if (inExtension || sameTarget) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      }
+    }
+    function suppressContextMenuAfterDismiss(e) {
+      if (!swallowedContextTarget) return;
+      const path = eventPath(e);
+      const inExtension = path.includes(root) || !!(root && root.contains && root.contains(e.target));
+      const sameTarget = e.target === swallowedContextTarget ||
+        (swallowedContextTarget && swallowedContextTarget.contains && swallowedContextTarget.contains(e.target)) ||
+        (e.target && e.target.contains && e.target.contains(swallowedContextTarget));
+      swallowedContextTarget = null;
+      if (inExtension || sameTarget) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      }
     }
 
     function build(items, cls, owner) {
@@ -157,12 +223,21 @@
     window.addEventListener('blur', hide);
     window.addEventListener('pagehide', hide);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') hide(); });
+    // Context menus close on any outside mouse press. Clicks on other extension
+    // items are consumed as dismiss-only so the item beneath cannot activate.
+    document.addEventListener('mousedown', dismissContextOutside, true);
+    document.addEventListener('click', swallowDismissedClick, true);
+    document.addEventListener('auxclick', swallowDismissedClick, true);
+    document.addEventListener('contextmenu', (e) => {
+      if (swallowedContextTarget) { suppressContextMenuAfterDismiss(e); return; }
+      dismissContextOutside(e);
+    }, true);
     root.addEventListener('mousedown', (e) => {
       const target = e.target;
       const insideMenu = target && target.closest && target.closest('.menu');
       const folderTrigger = target && target.closest && target.closest('.bm-folder-menu-trigger');
       if (isOpen() && !insideMenu && !folderTrigger) hide();
     }, true);
-    return { show, showBeside, showContext, showContextBeside, hide, isOpen };
+    return { show, showBeside, showContext, showContextBeside, hide, closeLatest, isOpen };
   };
 })();

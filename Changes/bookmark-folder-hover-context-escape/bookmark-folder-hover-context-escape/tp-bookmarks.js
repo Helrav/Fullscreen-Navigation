@@ -563,7 +563,9 @@
       thickness,
       hasOpenFolders() {
         const s = env.settings();
-        return !!s.bookmarks && s.bookmarksMode === 'card' && !horizontal() && openIds.size > 0;
+        const menuFolderOpen = openFolderMenuId !== null && env.menu.isOpen();
+        const inPlaceFolderOpen = s.bookmarksMode === 'card' && !horizontal() && openIds.size > 0;
+        return !!s.bookmarks && (menuFolderOpen || inPlaceFolderOpen);
       },
       refresh() { failed = false; data = null; lastKey = ''; if (env.settings().bookmarks) load(); }
     };

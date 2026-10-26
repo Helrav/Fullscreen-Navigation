@@ -28,6 +28,7 @@
   let contextMenu = null, bookmarks = null, dragIds = null, dragTarget = null;
   let dockDrag = null, hotZoneEditMode = false, tipEl = null, toastSince = 0, toastCount = 0;
   let searchPopupOpen = false;
+  let keepPeekOpenAfterEscape = false;
   let lastPointer = { x: -1, y: -1 };
   let windowNames = {};
   const DEFAULT_TOOLBAR_ORDER = ['bookmarks', 'pin', 'settings'];
@@ -505,7 +506,7 @@
     if (closeTimer) return;
     closeTimer = setTimeout(() => {
       closeTimer = 0;
-      if (hoverPanel || lastInZone || nearResizeTarget() || nearPanelEdge() || pinned || resizing || hotZoneEditMode || dragIds || hasBlockingPopup() || (contextMenu && contextMenu.isOpen()) || (bookmarks && bookmarks.hasOpenFolders && bookmarks.hasOpenFolders())) return;
+      if (keepPeekOpenAfterEscape || hoverPanel || lastInZone || nearResizeTarget() || nearPanelEdge() || pinned || resizing || hotZoneEditMode || dragIds || hasBlockingPopup() || (contextMenu && contextMenu.isOpen()) || (bookmarks && bookmarks.hasOpenFolders && bookmarks.hasOpenFolders())) return;
       if (root && root.activeElement === els.search) return;
       if (isBox()) return;
       closePeek();
@@ -519,6 +520,7 @@
   }
 
   function closePeek() {
+    keepPeekOpenAfterEscape = false;
     if (searchPopupOpen) closeSearchPopup(false);
     hotZoneEditMode = false;
     updateHintVisibility();
@@ -592,7 +594,13 @@
     if (e.type === 'keydown' && e.key === 'Escape') {
       if (settingsCard) { closeSettingsCard(); e.preventDefault(); return; }
       if (renamePrompt) { closePrompt(); e.preventDefault(); return; }
-      if (contextMenu && contextMenu.isOpen()) { contextMenu.hide(); e.preventDefault(); return; }
+      if (contextMenu && contextMenu.isOpen()) {
+        keepPeekOpenAfterEscape = true;
+        if (contextMenu.closeLatest) contextMenu.closeLatest(); else contextMenu.hide();
+        clearClose();
+        e.preventDefault();
+        return;
+      }
       if (hotZoneEditMode) {
         hotZoneEditMode = false;
         placeHint();
@@ -1126,7 +1134,7 @@
   }
 
   function hoverable(el) {
-    el.addEventListener('mouseenter', () => { hoverPanel = true; clearClose(); });
+    el.addEventListener('mouseenter', () => { keepPeekOpenAfterEscape = false; hoverPanel = true; clearClose(); });
     el.addEventListener('mouseleave', () => { hoverPanel = false; if (peek && !pinned) scheduleClose(); });
   }
 
