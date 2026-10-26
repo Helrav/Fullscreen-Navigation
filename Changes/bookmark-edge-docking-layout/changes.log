@@ -1,0 +1,12 @@
+Fix: Floating bookmark edge docking layout
+
+- Dragging the floating bookmark header/handle can attach bookmarks to the top or bottom of the windowed overlay as a compact horizontal bookmark bar.
+- The preview shows translucent placeholders for both the bookmark bar and the overlay's destination geometry; the live overlay is hidden during the drag so the preview remains clear.
+- Top attachment offsets the overlay downward by the bar height; bottom attachment offsets it upward, keeping the two surfaces adjacent instead of overlapping.
+- Top/bottom docking reserves screen space even while moving or resizing the floating overlay; the panel height is constrained so a bottom bar never extends past the viewport.
+- Left/right attachment remains available and does not reserve vertical space.
+- Edge detection measures distance to the actual panel-edge segments and prefers top/bottom at corner ties, so dragging the drawer header vertically can reach horizontal docking more naturally.
+- Added a grip to the horizontal bar so it can be dragged back to a side.
+- Hiding bookmarks or changing the attachment edge reverses/recalculates the reserved offset without accumulating movement.
+- Updated README usage notes.
+- Included a full copy of all 18 current root extension files; only content.js, defaults.js, README.md, tp-bookmarks.js, and tp-css.js differ. Backup and previous Changes folders are excluded.
