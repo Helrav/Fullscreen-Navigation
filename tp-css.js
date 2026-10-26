@@ -399,4 +399,45 @@ globalThis.TPX.CSS = `
 .panel[data-style=docked][data-dir=h] .list{padding-top:0;padding-bottom:0}
 .tab.drop-invalid{cursor:not-allowed;opacity:.48;outline:2px solid #d9534f;outline-offset:-2px}
 @media (prefers-reduced-motion:reduce){.panel,.pin svg,.chev{transition:none!important}}
+
+/* At the overlay's actual collapsed size, center icons in the narrow rail.
+   These rules deliberately use .overlay-collapsed rather than .compact so
+   the normal alignment returns as soon as the overlay is expanded. */
+.panel.overlay-collapsed[data-dir=v] .head{
+  justify-content:center;
+  align-items:center;
+}
+.panel.overlay-collapsed[data-dir=v] .head>.toolbar-item{
+  align-self:center;
+  margin-inline:auto;
+}
+.panel.overlay-collapsed[data-dir=v] .searchrow{
+  justify-content:center;
+  align-items:center;
+}
+.panel.overlay-collapsed[data-dir=v] .tab{
+  justify-content:center!important;
+  padding-left:0;
+  padding-right:0;
+}
+.panel.overlay-collapsed[data-dir=v] .whead,
+.panel.overlay-collapsed[data-dir=v] .ghead{
+  justify-content:center!important;
+  padding-left:0;
+  padding-right:0;
+}
+.panel.overlay-collapsed[data-dir=v] .gbody{
+  margin-left:0;
+  padding-left:0;
+  border-left:0;
+}
+.panel.overlay-collapsed[data-dir=h] .head{
+  justify-content:center;
+  align-items:center;
+}
+.panel.overlay-collapsed[data-dir=h] .tab,
+.panel.overlay-collapsed[data-dir=h] .whead,
+.panel.overlay-collapsed[data-dir=h] .ghead{
+  justify-content:center;
+}
 `;

@@ -595,6 +595,7 @@
       if (settingsCard) { closeSettingsCard(); e.preventDefault(); return; }
       if (renamePrompt) { closePrompt(); e.preventDefault(); return; }
       if (contextMenu && contextMenu.isOpen()) {
+        hideTip();
         keepPeekOpenAfterEscape = true;
         if (contextMenu.closeLatest) contextMenu.closeLatest(); else contextMenu.hide();
         clearClose();

@@ -5,7 +5,7 @@
   X.createMenu = (env) => {
     const { ui, root, h } = env;
     let el = null, open = false, contextEl = null, contextOpen = false;
-    let swallowedClickTarget = null, swallowedContextTarget = null;
+    let folderHoverMode = false;
     const isOpen = () => open || contextOpen;
 
     function notifyClosedIfLast(wasOpen) {
@@ -14,7 +14,7 @@
     function hideMain() {
       const wasOpen = open;
       if (el) el.remove();
-      el = null; open = false;
+      el = null; open = false; folderHoverMode = false;
       notifyClosedIfLast(wasOpen);
     }
     function hideContext() {
@@ -57,43 +57,7 @@
       return path.includes(menuEl) || (e.target && menuEl.contains(e.target));
     }
     function dismissContextOutside(e) {
-      if (!contextOpen || !contextEl || isInside(contextEl, e)) return;
-      const path = eventPath(e);
-      const inExtension = path.includes(root) || !!(root && root.contains && root.contains(e.target));
-      hideContext();
-      // A click on another extension control is dismiss-only: don't let that
-      // same press activate the item under the context menu.
-      if (inExtension) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        if (e.type === 'mousedown') swallowedClickTarget = e.target;
-        if (e.type === 'mousedown' && e.button === 2) swallowedContextTarget = e.target;
-      }
-    }
-    function swallowDismissedClick(e) {
-      if (!swallowedClickTarget) return;
-      const path = eventPath(e);
-      const inExtension = path.includes(root) || !!(root && root.contains && root.contains(e.target));
-      const sameTarget = e.target === swallowedClickTarget ||
-        (swallowedClickTarget && swallowedClickTarget.contains && swallowedClickTarget.contains(e.target)) ||
-        (e.target && e.target.contains && e.target.contains(swallowedClickTarget));
-      swallowedClickTarget = null;
-      if (inExtension || sameTarget) {
-        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      }
-    }
-    function suppressContextMenuAfterDismiss(e) {
-      if (!swallowedContextTarget) return;
-      const path = eventPath(e);
-      const inExtension = path.includes(root) || !!(root && root.contains && root.contains(e.target));
-      const sameTarget = e.target === swallowedContextTarget ||
-        (swallowedContextTarget && swallowedContextTarget.contains && swallowedContextTarget.contains(e.target)) ||
-        (e.target && e.target.contains && e.target.contains(swallowedContextTarget));
-      swallowedContextTarget = null;
-      if (inExtension || sameTarget) {
-        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      }
+      if (contextOpen && contextEl && !isInside(contextEl, e)) hideContext();
     }
 
     function build(items, cls, owner) {
@@ -142,18 +106,34 @@
             if (r.bottom > env.vh() - 4) sm.style.top = (-6 - (r.bottom - env.vh() + 8) / env.u()) + 'px';
           };
           if (it.clickSub) {
+            const closeSiblingFolders = () => {
+              for (const sibling of Array.from(box.children)) {
+                if (sibling === row || !sibling.classList || !sibling.classList.contains('mi')) continue;
+                sibling.classList.remove('open');
+                sibling.querySelectorAll('.mi.open').forEach((node) => node.classList.remove('open'));
+              }
+            };
+            const openThisFolder = () => {
+              closeSiblingFolders();
+              row.classList.add('open');
+              positionSubmenu();
+            };
+            // Before any folder has been clicked, hovering is intentionally inert.
+            // Once the user enters folder navigation, hovering another folder
+            // switches to it immediately and closes the previously open sibling.
+            row.addEventListener('mouseenter', () => {
+              if (!folderHoverMode || row.classList.contains('open')) return;
+              openThisFolder();
+            });
             row.addEventListener('click', (e) => {
               e.stopPropagation();
               if (it.disabled) return;
               if ((e.ctrlKey || e.metaKey) && it.modifiedAction) {
                 it.modifiedAction(e); return;
               }
+              folderHoverMode = true;
               const wasOpen = row.classList.contains('open');
-              for (const sibling of Array.from(box.children)) {
-                if (sibling === row || !sibling.classList || !sibling.classList.contains('mi')) continue;
-                sibling.classList.remove('open');
-                sibling.querySelectorAll('.mi.open').forEach((node) => node.classList.remove('open'));
-              }
+              closeSiblingFolders();
               row.classList.toggle('open', !wasOpen);
               if (wasOpen) sm.style.top = '';
               else positionSubmenu();
@@ -201,6 +181,7 @@
 
     function show(items, x, y, side) {
       hide();
+      folderHoverMode = false;
       if (!items.length) return;
       el = build(items, 'menu', 'main'); ui.appendChild(el); open = true;
       if (env.onOpen) env.onOpen();
@@ -223,15 +204,10 @@
     window.addEventListener('blur', hide);
     window.addEventListener('pagehide', hide);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') hide(); });
-    // Context menus close on any outside mouse press. Clicks on other extension
-    // items are consumed as dismiss-only so the item beneath cannot activate.
+    // Outside presses dismiss the topmost context menu but are otherwise allowed
+    // to reach the clicked item, including items in the folder menu behind it.
     document.addEventListener('mousedown', dismissContextOutside, true);
-    document.addEventListener('click', swallowDismissedClick, true);
-    document.addEventListener('auxclick', swallowDismissedClick, true);
-    document.addEventListener('contextmenu', (e) => {
-      if (swallowedContextTarget) { suppressContextMenuAfterDismiss(e); return; }
-      dismissContextOutside(e);
-    }, true);
+    document.addEventListener('contextmenu', dismissContextOutside, true);
     root.addEventListener('mousedown', (e) => {
       const target = e.target;
       const insideMenu = target && target.closest && target.closest('.menu');
