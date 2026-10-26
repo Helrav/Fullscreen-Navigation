@@ -1,8 +1,7 @@
-Fix: overlay New window menu item and horizontal bookmark-folder navigation
+Fix: overflow-bookmark popup placement, screen-relative default window size, and precise edge docking
 
-- Add New window (Ctrl+N) to the overlay blank-space context menu, using the menu's existing right-aligned shortcut layout.
-- Add a background message handler that creates a new browser window.
-- Position horizontal bookmark-folder menus below top-positioned bookmark bars and above bottom-positioned bars; flip when the preferred side lacks more space.
-- Add a capture-phase click dismissal fallback for open menus when clicking outside the menu and folder triggers, without stopping the clicked control's own handler.
-- Preserve bookmark dragging, existing context-menu handlers, bookmark activation, and folder-trigger behavior.
-- The Test branch stores this working copy under lowercase changes/.
+- Make the horizontal bookmarks overflow (» / “More bookmarks”) popup use the same adaptive above/below placement as horizontal bookmark folders, including flipping when the preferred side has insufficient space.
+- Set the initial Windowed overlay size to 30% of screen width by 35% of screen height, accounting for browser zoom and only shrinking when the current viewport cannot fit the requested size.
+- Require the drag pointer itself to reach within 0.5% of the browser viewport edge before docking; apply this consistently when converting a docked overlay to Windowed mode and when moving an already-windowed overlay.
+- Keep existing saved Windowed dimensions intact; the new size applies when a Windowed rect is first created.
+- Changes are confined to the existing lowercase changes/ workspace on the Test branch.
