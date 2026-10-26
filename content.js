@@ -956,46 +956,80 @@
 
   let selectedForMenu = [];
 
+  function siteKeyFor(tab) {
+    try {
+      const url = new URL(tab.url);
+      if (url.protocol === 'http:' || url.protocol === 'https:') return url.hostname;
+    } catch (_) {}
+    return 'tab:' + tab.id;
+  }
+
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (_) {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      (document.body || document.documentElement).appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch (_) { return false; }
+  }
+
   function showTabMenu(id, x, y) {
     if (!contextMenu) return;
     const ids = selected.has(id) ? orderedIds([...selected]) : [id];
     selectedForMenu = ids.slice();
-    const tabs = ids.map(getTab).filter(Boolean).map((item) => item.tab);
-    if (!tabs.length) return;
+    const found = ids.map(getTab).filter(Boolean);
+    if (!found.length) return;
     const multiple = ids.length > 1;
-    const gid = sameGroupFor(ids);
-    const wid = sameWindowFor(ids);
+    const s = multiple ? 's' : '';
+
+    // "Mute site" applies to every open tab on the same site as the chosen tab(s).
+    const keys = new Set(found.map((item) => siteKeyFor(item.tab)));
+    const siteIds = [];
+    for (const win of (data.windows || [])) {
+      for (const tab of (win.tabs || [])) if (keys.has(siteKeyFor(tab))) siteIds.push(tab.id);
+    }
+    const siteMuted = allMuted(siteIds);
+
+    // "Close other tabs" only looks at the window(s) the chosen tab(s) are in.
+    // Like the browser's own menu, pinned tabs are left alone.
+    const picked = new Set(ids);
+    const winIds = new Set(found.map((item) => item.win.id));
+    const others = [], toRight = [];
+    for (const win of (data.windows || [])) {
+      if (!winIds.has(win.id)) continue;
+      let last = -1;
+      win.tabs.forEach((tab, i) => { if (picked.has(tab.id)) last = i; });
+      win.tabs.forEach((tab, i) => {
+        if (picked.has(tab.id) || tab.pinned) return;
+        others.push(tab.id);
+        if (i > last) toRight.push(tab.id);
+      });
+    }
+
+    const urls = found.map((item) => item.tab.url).filter(Boolean);
     const items = [];
-    if (!multiple) items.push({ label: 'Switch to tab', action: () => activate(id) }, { sep: true });
+    if (!multiple) {
+      items.push({ label: 'New tab to the right', action: () => send({ type: 'tabop', op: 'newRight', tabIds: ids }) });
+    }
     items.push(
-      { label: allMuted(ids) ? 'Unmute tab' + (multiple ? 's' : '') : 'Mute tab' + (multiple ? 's' : ''), action: () => send({ type: 'tabop', op: 'mute', tabIds: ids, value: !allMuted(ids) }) },
-      { label: allPinned(ids) ? 'Unpin tab' + (multiple ? 's' : '') : 'Pin tab' + (multiple ? 's' : ''), action: () => send({ type: 'tabop', op: 'pin', tabIds: ids, value: !allPinned(ids) }) },
-      { label: 'Duplicate tab' + (multiple ? 's' : ''), action: () => send({ type: 'tabop', op: 'duplicate', tabIds: ids }) },
-      { label: 'Reload tab' + (multiple ? 's' : ''), action: () => send({ type: 'tabop', op: 'reload', tabIds: ids }) },
-      { label: 'Bookmark tab' + (multiple ? 's' : ''), action: () => send({ type: 'tabop', op: 'bookmark', tabIds: ids }) },
+      { label: 'Add tab' + s + ' to new group', action: () => send({ type: 'group', tabIds: ids }) },
+      { label: 'Move tab' + s + ' to new window', action: () => send({ type: 'tabop', op: 'newWindow', tabIds: ids }) },
       { sep: true },
-      { label: multiple ? 'Group tabs' : 'Group tab', action: () => send({ type: 'group', tabIds: ids }) },
-      { label: 'Move to group', sub: groupMenuItems(ids) }
+      { label: 'Copy URL', disabled: !urls.length, action: () => copyText(urls.join('\n')) },
+      { label: 'Reload', action: () => send({ type: 'tabop', op: 'reload', tabIds: ids }) },
+      { label: 'Duplicate', action: () => send({ type: 'tabop', op: 'duplicate', tabIds: ids }) },
+      { label: allPinned(ids) ? 'Unpin' : 'Pin', action: () => send({ type: 'tabop', op: 'pin', tabIds: ids, value: !allPinned(ids) }) },
+      { label: (siteMuted ? 'Unmute site' : 'Mute site') + s, action: () => send({ type: 'tabop', op: 'mute', tabIds: siteIds, value: !siteMuted }) },
+      { sep: true },
+      { label: 'Close', danger: true, action: () => closeTabs(ids) },
+      { label: 'Close other tabs', danger: true, disabled: !others.length, action: () => closeTabs(others) },
+      { label: 'Close other tabs to the right', danger: true, disabled: !toRight.length, action: () => closeTabs(toRight) }
     );
-    if (gid >= 0) {
-      items.push({ sep: true });
-      const group = data.groups[gid] || {};
-      items.push(
-        { label: 'Color group', sub: GROUP_COLOR_NAMES.map((name) => ({
-          label: name[0].toUpperCase() + name.slice(1), dot: GROUP_COLORS[name], checked: group.color === name,
-          action: () => send({ type: 'groupSet', groupId: gid, color: name })
-        })) },
-        { label: 'Rename group…', action: () => promptText('Rename group', group.title || '', (title) => send({ type: 'groupSet', groupId: gid, title })) },
-        { label: 'Ungroup tabs', action: () => send({ type: 'tabop', op: 'ungroup', tabIds: ids }) }
-      );
-    } else if (tabs.some((tab) => tab.groupId >= 0)) {
-      items.push({ sep: true }, { label: 'Ungroup tabs', action: () => send({ type: 'tabop', op: 'ungroup', tabIds: ids }) });
-    }
-    if (wid !== null) {
-      const win = (data.windows || []).find((item) => item.id === wid);
-      items.push({ sep: true }, { label: 'Rename window…', action: () => promptText('Rename window', win?.name || '', (name) => send({ type: 'renameWindow', windowId: wid, name })) });
-    }
-    items.push({ sep: true }, { label: 'Close tab' + (multiple ? 's' : ''), danger: true, action: () => closeTabs(ids) });
     contextMenu.showContext(items, x, y);
   }
 
@@ -1352,15 +1386,25 @@
   }
 
   // ---------- push mode ----------
-  const pushSize = () => {
-    const base = (isVertical() ? settings.panelWidth : settings.barHeight) * u;
+  // A docked overlay can reserve space on more than one side: a vertical panel
+  // with a horizontal bookmark bar needs both its width and the bar's height.
+  const pushParts = () => {
+    if (!(shown && pinned && pushHere())) return [];
+    const parts = [];
     const extra = bookmarks && typeof bookmarks.thickness === 'function' ? bookmarks.thickness() * u : 0;
-    return base + extra;
+    parts.push({ dir: settings.edge, px: (isVertical() ? settings.panelWidth : settings.barHeight) * u + extra });
+    if (bookmarks && isVertical() && settings.bookmarks && ['top', 'bottom'].includes(settings.floatingBookmarksEdge || 'auto')) {
+      // The bookmark bar is not part of the sidebar's width in this layout; it
+      // spans the viewport at the top or bottom, so the page needs that room too.
+      parts.push({ dir: settings.floatingBookmarksEdge, px: FLOATING_BOOKMARK_BAR_HEIGHT * u });
+    }
+    return parts;
   };
 
   function syncPush(animate) {
     if (!globalThis.TPX || !globalThis.TPX.push) return;
-    if (shown && pinned && pushHere()) TPX.push.on(settings.edge, pushSize(), animate);
+    const parts = pushParts();
+    if (parts.length) TPX.push.on(parts, animate);
     else TPX.push.off(animate);
   }
 

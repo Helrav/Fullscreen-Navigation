@@ -672,6 +672,20 @@ async function handle(message, sender) {
         case 'reload':
           await Promise.all(ids.map((id) => api.tabs.reload(id)));
           break;
+        case 'newRight': {
+          const cur = await api.tabs.get(ids[0]);
+          const created = await api.tabs.create({ windowId: cur.windowId, index: cur.index + 1, active: true });
+          if (Number.isInteger(cur.groupId) && cur.groupId >= 0 && api.tabs.group) {
+            try { await api.tabs.group({ tabIds: [created.id], groupId: cur.groupId }); } catch (_) {}
+          }
+          break;
+        }
+        case 'newWindow': {
+          const win = await api.windows.create({ tabId: ids[0] });
+          const rest = ids.slice(1);
+          if (rest.length && win && Number.isInteger(win.id)) await api.tabs.move(rest, { windowId: win.id, index: -1 });
+          break;
+        }
         case 'bookmark':
           return bookmarkTabs(ids);
         case 'ungroup':

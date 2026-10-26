@@ -63,8 +63,15 @@
       const path = eventPath(e);
       return path.includes(menuEl) || (e.target && menuEl.contains(e.target));
     }
-    function dismissContextOutside(e) {
-      if (contextOpen && contextEl && !isInside(contextEl, e)) hideContext();
+    // These listeners sit on the page's window. The overlay lives in a closed
+    // shadow root, so for presses inside the overlay the page only sees the host
+    // element (composedPath cannot reveal the menu). Those presses are handled
+    // by the listeners on `root` below; only presses on the page itself close
+    // everything here. The press is never stopped, so it still reaches the page.
+    function dismissOutside(e) {
+      if (!isOpen()) return;
+      if (e.target === root.host) return;
+      hide();
     }
 
     function build(items, cls, owner) {
@@ -215,15 +222,23 @@
     window.addEventListener('blur', hide);
     window.addEventListener('pagehide', hide);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') hide(); });
-    // Outside presses dismiss the topmost context menu but are otherwise allowed
-    // to reach the clicked item, including items in the folder menu behind it.
-    document.addEventListener('mousedown', dismissContextOutside, true);
-    document.addEventListener('contextmenu', dismissContextOutside, true);
+    // Pressing anywhere on the page closes the folder menu and any context menu,
+    // even while the overlay is pinned. Registered on window (capture) so it runs
+    // before page scripts that stop propagation lower down.
+    window.addEventListener('mousedown', dismissOutside, true);
+    window.addEventListener('pointerdown', dismissOutside, true);
+    window.addEventListener('contextmenu', dismissOutside, true);
     root.addEventListener('mousedown', (e) => {
       const target = e.target;
       const insideMenu = target && target.closest && target.closest('.menu');
       const folderTrigger = target && target.closest && target.closest('.bm-folder-menu-trigger');
       if (isOpen() && !insideMenu && !folderTrigger) hide();
+    }, true);
+    // Right-clicking somewhere else inside the overlay closes an open context menu.
+    root.addEventListener('contextmenu', (e) => {
+      const target = e.target;
+      const insideMenu = target && target.closest && target.closest('.menu');
+      if (contextOpen && !insideMenu) hideContext();
     }, true);
     return { show, showBeside, switchFolderBeside, activateFolderHoverMode, isFolderHoverActive, showContext, showContextBeside, hide, closeLatest, isOpen };
   };
