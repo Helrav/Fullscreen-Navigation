@@ -712,11 +712,27 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Live tab lists stay attached only while the overlay is visible.
 const ports = new Set();
+function postWindowState(entry) {
+  if (!entry || !Number.isInteger(entry.windowId) || !ports.has(entry)) return;
+  api.windows.get(entry.windowId).then((win) => {
+    if (ports.has(entry)) entry.port.postMessage({ type: 'windowState', fullscreen: !!(win && win.state === 'fullscreen') });
+  }).catch(() => {});
+}
+let windowStateTimer = 0;
+function scheduleWindowStates() {
+  clearTimeout(windowStateTimer);
+  windowStateTimer = setTimeout(() => {
+    for (const entry of ports) postWindowState(entry);
+  }, 80);
+}
+api.windows.onBoundsChanged?.addListener(scheduleWindowStates);
+api.windows.onFocusChanged?.addListener(scheduleWindowStates);
 api.runtime.onConnect.addListener((port) => {
   if (port.name !== 'tabs' || !port.sender || !port.sender.tab) return;
   const entry = { port, windowId: port.sender.tab.windowId };
   ports.add(entry);
   port.onDisconnect.addListener(() => ports.delete(entry));
+  postWindowState(entry);
   collect().then((base) => port.postMessage({ type: 'tabs', cur: entry.windowId, ...base })).catch(() => {});
 });
 

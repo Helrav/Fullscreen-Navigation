@@ -349,7 +349,7 @@
       content.append(head, list);
     }
 
-    // ----- vertical card: names, folders open in place -----
+    // ----- vertical card: named items; folders open the same popup as strip mode -----
     function renderCard() {
       const head = h('div', 'bmhead');
       const title = h('span', 'bmtitle', 'Bookmarks');
@@ -358,47 +358,38 @@
       head.title = 'Drag this header to move bookmarks around the floating overlay';
       head.addEventListener('pointerdown', startFloatingBookmarkDrag);
       const list = h('div', 'bmlist');
-      const rows = (nodes, depth) => {
-        for (const n of nodes) {
-          const row = h('div', 'bmr');
-          row.style.paddingLeft = (8 + depth * 14) + 'px';
-          attachBookmarkTooltip(row, n);
-          if (n.children) {
-            const isOpen = openIds.has(n.id);
-            const c = env.chevron();
-            c.classList.add('bmchev');
-            if (isOpen) c.classList.add('o');
-            row.append(c, icon(n), h('span', 'bmt', label(n)));
-            row.addEventListener('click', (e) => {
-              e.preventDefault(); e.stopPropagation();
-              if (e.ctrlKey || e.metaKey) { openFolderInBackground(n); return; }
-              if (openIds.has(n.id)) openIds.delete(n.id);
-              else openIds.add(n.id);
-              renderContent();
-            });
-            row.addEventListener('auxclick', (e) => {
-              if (e.button === 1) { e.preventDefault(); e.stopPropagation(); openFolderInBackground(n); }
-            });
-            row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
-            list.appendChild(row);
-            if (isOpen) {
-              if (n.children.length) rows(n.children, depth + 1);
-              else { const e = h('div', 'bmr bmempty', '(empty)'); e.style.paddingLeft = (8 + (depth + 1) * 14 + 16) + 'px'; list.appendChild(e); }
-            }
-          } else {
-            row.append(h('span', 'bmsp'), icon(n), h('span', 'bmt', label(n)));
-            row.addEventListener('click', (e) => openBm(n, e));
-            row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
-            row.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
-            list.appendChild(row);
-          }
+      const pos = el.dataset.pos || '';
+      const side = pos.endsWith('left') ? 'left'
+        : pos.endsWith('right') ? 'right'
+        : (pos.endsWith('top') ? 'above' : 'below');
+
+      for (const n of allTop()) {
+        const row = h('div', 'bmr');
+        row.style.paddingLeft = '8px';
+        row.append(h('span', 'bmsp'), icon(n), h('span', 'bmt', label(n)));
+        attachBookmarkTooltip(row, n);
+        if (n.children) {
+          row.classList.add('bm-folder-menu-trigger');
+          row.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (e.ctrlKey || e.metaKey) { openFolderInBackground(n); return; }
+            toggleFolderMenu(n, row, side);
+          });
+          row.addEventListener('auxclick', (e) => {
+            if (e.button === 1) { e.preventDefault(); e.stopPropagation(); openFolderInBackground(n); }
+          });
+        } else {
+          row.addEventListener('click', (e) => openBm(n, e));
+          row.addEventListener('auxclick', (e) => {
+            if (e.button === 1) { e.preventDefault(); openBm(n, e); }
+          });
         }
-      };
-      rows(allTop(), 0);
+        row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
+        list.appendChild(row);
+      }
       if (!list.childNodes.length) list.appendChild(h('div', 'bmr bmempty', 'No bookmarks yet'));
       content.append(head, list);
     }
-
     function renderContent() {
       content.replaceChildren();
       const s = env.settings();

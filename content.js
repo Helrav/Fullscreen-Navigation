@@ -240,16 +240,27 @@
     } catch (e) {}
   }
 
+  function applyFullscreenState(next) {
+    const wasFullscreen = fullscreen;
+    fullscreen = !!next;
+    if (wasFullscreen && !fullscreen) {
+      // Browser fullscreen exit is a window-state transition (F11), not
+      // necessarily a document.fullscreenchange event or exact screen-size match.
+      if (bookmarks && bookmarks.closeNavigation) bookmarks.closeNavigation();
+      hideTip();
+    }
+    return wasFullscreen !== fullscreen;
+  }
+
   async function queryEnv() {
     const r = await send({ type: 'env' });
     if (r) return { fs: !!r.fullscreen, zoom: r.zoom > 0 ? r.zoom : 1 };
-    return { fs: window.innerWidth >= screen.width - 1 && window.innerHeight >= screen.height - 1, zoom: 1 };
+    return { fs: false, zoom: 1 };
   }
 
   async function refreshEnv() {
     const r = await queryEnv();
-    let changed = false;
-    if (r.fs !== fullscreen) { fullscreen = r.fs; changed = true; }
+    let changed = applyFullscreenState(r.fs);
     const nu = 1 / r.zoom;
     if (Math.abs(nu - u) > 0.001) { u = nu; applyUnit(); changed = true; }
     if (changed) update();
@@ -623,6 +634,9 @@
       port.onMessage.addListener((m) => {
         if (m && m.type === 'tabs') { data = m; render(); if (bookmarks) bookmarks.update(); }
         else if (m && m.type === 'bm' && bookmarks) bookmarks.refresh();
+        else if (m && m.type === 'windowState') {
+          if (applyFullscreenState(!!m.fullscreen)) update();
+        }
       });
       port.onDisconnect.addListener(() => {
         if (port === mine) port = null;
@@ -2323,27 +2337,7 @@
       clearOpen();
       if (peek && !pinned && !hoverPanel) scheduleClose();
     });
-    function isFullscreenMode() {
-      if (document.fullscreenElement) return true;
-      const screenWidth = window.screen && Number(window.screen.width);
-      const screenHeight = window.screen && Number(window.screen.height);
-      return Number.isFinite(screenWidth) && Number.isFinite(screenHeight) &&
-        screenWidth > 0 && screenHeight > 0 &&
-        window.outerWidth >= screenWidth - 2 && window.outerHeight >= screenHeight - 2;
-    }
-    let fullscreenModeWasActive = isFullscreenMode();
-    function syncFullscreenNavigation() {
-      const active = isFullscreenMode();
-      if (fullscreenModeWasActive && !active) {
-        // Leaving browser fullscreen should reset all bookmark menu layers
-        // and all in-place expanded folders, without requiring another click.
-        if (bookmarks && bookmarks.closeNavigation) bookmarks.closeNavigation();
-        hideTip();
-      }
-      fullscreenModeWasActive = active;
-    }
     window.addEventListener('resize', () => {
-      syncFullscreenNavigation();
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(async () => {
         await refreshEnv();
@@ -2353,8 +2347,8 @@
         if (shown) update(true);
       }, 120);
     });
-    window.addEventListener('pageshow', (e) => { if (e.persisted) { refreshEnv(); update(true); syncFullscreenNavigation(); } });
-    document.addEventListener('fullscreenchange', () => { syncFullscreenNavigation(); update(); });
+    window.addEventListener('pageshow', (e) => { if (e.persisted) { refreshEnv(); update(true); } });
+    document.addEventListener('fullscreenchange', () => { refreshEnv(); update(); });
     document.addEventListener('visibilitychange', () => {
       if (dead) return;
       if (document.visibilityState === 'visible') refreshEnv();
