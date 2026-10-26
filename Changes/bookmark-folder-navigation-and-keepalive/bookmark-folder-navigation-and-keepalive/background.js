@@ -634,15 +634,6 @@ async function handle(message, sender) {
       await api.windows.remove(message.windowId);
       return { ok: true };
     }
-    case 'openTaskManager': {
-      const targetWindowId = Number.isInteger(message.windowId) ? message.windowId : windowId;
-      const ua = String((globalThis.navigator && globalThis.navigator.userAgent) || '');
-      const url = /Firefox\//i.test(ua) ? 'about:processes'
-        : /Edg\//i.test(ua) ? 'edge://taskmanager/'
-        : 'chrome://taskmanager/';
-      await api.tabs.create({ url, ...(Number.isInteger(targetWindowId) ? { windowId: targetWindowId } : {}) });
-      return { ok: true };
-    }
     case 'go':
       return go(message.text, !!message.inNew, sender);
     case 'openUrl': {

@@ -277,6 +277,8 @@ globalThis.TPX.CSS = `
 .mi.dis{opacity:.45;pointer-events:none}
 .mi.danger{color:#d9534f}
 .mi.has-sub:hover>.submenu{display:block}
+.mi.has-sub.click-sub:hover>.submenu{display:none}
+.mi.has-sub.click-sub.open>.submenu{display:block}
 .mlead{flex:none;width:16px;height:16px;display:grid;place-items:center}
 .mdot{width:11px;height:11px;border-radius:50%}
 .mlabel{min-width:0;max-width:280px;overflow:hidden;text-overflow:ellipsis}

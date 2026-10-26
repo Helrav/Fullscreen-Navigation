@@ -111,11 +111,25 @@
       env.open(n.url, bg ? 'bg' : 'current');
     }
 
+    function openFolderInBackground(n) {
+      if (!n || !n.children || !n.children.length) return;
+      env.send({ type: 'bookmarkAction', op: 'openFolder', id: n.id });
+    }
+
     function toItems(nodes) {
       if (!nodes.length) return [{ label: '(empty)', disabled: true }];
       return nodes.map((n) => (n.children
-        ? { label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n), sub: toItems(n.children), onContext: (e) => showContextMenu(e, n) }
-        : { label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n), action: () => openBm(n, null), onContext: (e) => showContextMenu(e, n) }));
+        ? {
+            label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n),
+            sub: toItems(n.children), clickSub: true,
+            modifiedAction: () => openFolderInBackground(n),
+            onContext: (e) => showContextMenu(e, n)
+          }
+        : {
+            label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n),
+            action: (e) => openBm(n, e), keepOpenOnModified: true,
+            onContext: (e) => showContextMenu(e, n)
+          }));
     }
 
     function toggleFolderMenu(n, button, side) {
@@ -202,7 +216,8 @@
         { label: 'Open bookmarks manager', action: run('openManager') },
         { label: 'Show bookmark bar', action: run('showBarSettings') }
       ];
-      env.menu.show(items, e.clientX, e.clientY);
+      if (env.menu.showContext) env.menu.showContext(items, e.clientX, e.clientY);
+      else env.menu.show(items, e.clientX, e.clientY);
     }
 
     function allTop() {
@@ -225,7 +240,13 @@
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.classList.add('bm-folder-menu-trigger');
-          b.addEventListener('click', () => toggleFolderMenu(n, b, el.dataset.pos === 'above' ? 'above' : 'below'));
+          b.addEventListener('click', (e) => {
+            if (e.ctrlKey || e.metaKey) { e.preventDefault(); openFolderInBackground(n); return; }
+            toggleFolderMenu(n, b, el.dataset.pos === 'above' ? 'above' : 'below');
+          });
+          b.addEventListener('auxclick', (e) => {
+            if (e.button === 1) { e.preventDefault(); openFolderInBackground(n); }
+          });
         } else {
           b.addEventListener('click', (e) => openBm(n, e));
           b.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
@@ -294,7 +315,13 @@
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.classList.add('bm-folder-menu-trigger');
-          b.addEventListener('click', () => toggleFolderMenu(n, b, side));
+          b.addEventListener('click', (e) => {
+            if (e.ctrlKey || e.metaKey) { e.preventDefault(); openFolderInBackground(n); return; }
+            toggleFolderMenu(n, b, side);
+          });
+          b.addEventListener('auxclick', (e) => {
+            if (e.button === 1) { e.preventDefault(); openFolderInBackground(n); }
+          });
         } else {
           b.addEventListener('click', (e) => openBm(n, e));
           b.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
@@ -325,11 +352,14 @@
             if (isOpen) c.classList.add('o');
             row.append(c, icon(n), h('span', 'bmt', label(n)));
             row.addEventListener('click', (e) => {
-              e.preventDefault();
-              e.stopPropagation();
+              e.preventDefault(); e.stopPropagation();
+              if (e.ctrlKey || e.metaKey) { openFolderInBackground(n); return; }
               if (openIds.has(n.id)) openIds.delete(n.id);
               else openIds.add(n.id);
               renderContent();
+            });
+            row.addEventListener('auxclick', (e) => {
+              if (e.button === 1) { e.preventDefault(); e.stopPropagation(); openFolderInBackground(n); }
             });
             row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
             list.appendChild(row);
@@ -531,6 +561,10 @@
       el,
       update,
       thickness,
+      hasOpenFolders() {
+        const s = env.settings();
+        return !!s.bookmarks && s.bookmarksMode === 'card' && !horizontal() && openIds.size > 0;
+      },
       refresh() { failed = false; data = null; lastKey = ''; if (env.settings().bookmarks) load(); }
     };
   };

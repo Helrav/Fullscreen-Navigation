@@ -1,35 +1,46 @@
 // A small menu (with sub-menus) drawn by Tab Peek. Every entry runs a real browser feature.
-// Item shapes: {label, action, disabled, danger, checked, dot:'#hex', icon:()=>Node, sub:[items]} or {sep:true}
+// Item shapes: {label, action, disabled, danger, checked, dot:'#hex', icon:()=>Node, sub:[items]}
 (() => {
   const X = (globalThis.TPX = globalThis.TPX || {});
-
   X.createMenu = (env) => {
     const { ui, root, h } = env;
-    let el = null, open = false;
+    let el = null, open = false, contextEl = null, contextOpen = false;
+    const isOpen = () => open || contextOpen;
 
+    function notifyClosedIfLast(wasOpen) {
+      if (wasOpen && !isOpen() && env.onClose) env.onClose();
+    }
+    function hideMain() {
+      const wasOpen = open;
+      if (el) el.remove();
+      el = null; open = false;
+      notifyClosedIfLast(wasOpen);
+    }
+    function hideContext() {
+      const wasOpen = contextOpen;
+      if (contextEl) contextEl.remove();
+      contextEl = null; contextOpen = false;
+      notifyClosedIfLast(wasOpen);
+    }
     function hide() {
-      if (!el) return;
-      el.remove();
-      el = null;
-      if (open) {
-        open = false;
-        if (env.onClose) env.onClose();
-      }
+      const wasOpen = isOpen();
+      if (el) el.remove();
+      if (contextEl) contextEl.remove();
+      el = null; contextEl = null; open = false; contextOpen = false;
+      notifyClosedIfLast(wasOpen);
     }
 
-    function build(items, cls) {
+    function build(items, cls, owner) {
       const box = h('div', cls);
-      // The extension host has pointer-events:none so page interaction remains
-      // unaffected outside the overlay. Menus must explicitly opt back in or
-      // clicks fall through to the tab/page and the capture listener dismisses
-      // the menu before its action can fire.
+      const dismiss = owner === 'context' ? hideContext : hideMain;
       box.style.pointerEvents = 'auto';
       box.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
-      // Long plain lists scroll; lists with sub-menus must not (a scrolling box would clip its sub-menus).
       if (!items.some((i) => i.sub)) box.classList.add('scroll');
       for (const it of items) {
         if (it.sep) { box.appendChild(h('div', 'msep')); continue; }
-        const row = h('div', 'mi' + (it.disabled ? ' dis' : '') + (it.danger ? ' danger' : '') + (it.sub ? ' has-sub' : ''));
+        const row = h('div', 'mi' + (it.disabled ? ' dis' : '') +
+          (it.danger ? ' danger' : '') + (it.sub ? ' has-sub' : '') +
+          (it.clickSub ? ' click-sub' : ''));
         if (it.tooltip && it.tooltip.title && typeof env.tip === 'function') {
           row.addEventListener('mouseenter', () => {
             const rect = row.getBoundingClientRect();
@@ -40,27 +51,22 @@
         } else if (it.title) row.title = String(it.title);
         if (typeof it.onContext === 'function') {
           row.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            it.onContext(e);
+            e.preventDefault(); e.stopPropagation(); it.onContext(e);
           });
         }
         const lead = h('span', 'mlead');
         if (it.dot) {
-          const d = h('span', 'mdot');
-          d.style.background = it.dot;
-          lead.appendChild(d);
-        } else if (it.icon) {
-          lead.appendChild(it.icon());
-        }
+          const d = h('span', 'mdot'); d.style.background = it.dot; lead.appendChild(d);
+        } else if (it.icon) lead.appendChild(it.icon());
         row.append(lead, h('span', 'mlabel', it.label));
         if (it.shortcut) row.appendChild(h('span', 'mshortcut', it.shortcut));
         if (it.checked) row.appendChild(h('span', 'mchk', '✓'));
+
         if (it.sub) {
           row.appendChild(h('span', 'marrow', '›'));
-          const sm = build(it.sub, 'submenu');
+          const sm = build(it.sub, 'submenu', owner);
           row.appendChild(sm);
-          row.addEventListener('mouseenter', () => {
+          const positionSubmenu = () => {
             sm.classList.remove('flip');
             sm.style.top = '';
             sm.style.display = 'block';
@@ -68,13 +74,45 @@
             sm.style.display = '';
             if (r.right > env.vw() - 4) sm.classList.add('flip');
             if (r.bottom > env.vh() - 4) sm.style.top = (-6 - (r.bottom - env.vh() + 8) / env.u()) + 'px';
-          });
+          };
+          if (it.clickSub) {
+            row.addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (it.disabled) return;
+              if ((e.ctrlKey || e.metaKey) && it.modifiedAction) {
+                it.modifiedAction(e); return;
+              }
+              const wasOpen = row.classList.contains('open');
+              for (const sibling of Array.from(box.children)) {
+                if (sibling === row || !sibling.classList || !sibling.classList.contains('mi')) continue;
+                sibling.classList.remove('open');
+                sibling.querySelectorAll('.mi.open').forEach((node) => node.classList.remove('open'));
+              }
+              row.classList.toggle('open', !wasOpen);
+              if (wasOpen) sm.style.top = '';
+              else positionSubmenu();
+            });
+            row.addEventListener('auxclick', (e) => {
+              if (e.button !== 1 || it.disabled || !it.modifiedAction) return;
+              e.preventDefault(); e.stopPropagation(); it.modifiedAction(e);
+            });
+          } else {
+            row.addEventListener('mouseenter', positionSubmenu);
+          }
         } else {
           row.addEventListener('click', (e) => {
             e.stopPropagation();
             if (it.disabled) return;
-            hide();
-            if (it.action) it.action();
+            if (it.keepOpenOnModified && (e.ctrlKey || e.metaKey)) {
+              if (it.action) it.action(e); return;
+            }
+            dismiss();
+            if (it.action) it.action(e);
+          });
+          row.addEventListener('auxclick', (e) => {
+            if (e.button !== 1 || it.disabled || !it.keepOpenOnModified) return;
+            e.preventDefault(); e.stopPropagation();
+            if (it.action) it.action(e);
           });
         }
         row.addEventListener('mousedown', (e) => e.preventDefault());
@@ -83,53 +121,48 @@
       return box;
     }
 
-    function place(x, y, side) {
+    function place(menuEl, x, y, side) {
       const u = env.u();
-      el.style.left = (x / u) + 'px';
-      el.style.top = (y / u) + 'px';
-      const r = el.getBoundingClientRect();
+      menuEl.style.left = (x / u) + 'px'; menuEl.style.top = (y / u) + 'px';
+      const r = menuEl.getBoundingClientRect();
       let nx = x, ny = y;
       if (side === 'left') nx = x - r.width;
       if (side === 'above') ny = y - r.height;
       nx = Math.max(4, Math.min(nx, env.vw() - 4 - r.width));
       ny = Math.max(4, Math.min(ny, env.vh() - 4 - r.height));
-      el.style.left = (nx / u) + 'px';
-      el.style.top = (ny / u) + 'px';
+      menuEl.style.left = (nx / u) + 'px'; menuEl.style.top = (ny / u) + 'px';
     }
 
     function show(items, x, y, side) {
       hide();
       if (!items.length) return;
-      el = build(items, 'menu');
-      ui.appendChild(el);
-      open = true;
+      el = build(items, 'menu', 'main'); ui.appendChild(el); open = true;
       if (env.onOpen) env.onOpen();
-      place(x, y, side);
+      place(el, x, y, side);
     }
-
-    // Open next to an element: side = the side of the element the menu appears on.
+    function showContext(items, x, y, side) {
+      hideContext();
+      if (!items.length) return;
+      contextEl = build(items, 'menu context-menu', 'context'); ui.appendChild(contextEl); contextOpen = true;
+      if (env.onOpen) env.onOpen();
+      place(contextEl, x, y, side);
+    }
     function showBeside(items, rect, side) {
-      const x = side === 'right' ? rect.right : rect.left;
-      const y = side === 'below' ? rect.bottom : rect.top;
-      show(items, x, y, side);
+      show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side);
+    }
+    function showContextBeside(items, rect, side) {
+      showContext(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side);
     }
 
-    // Browser/page blur should dismiss extension-rendered menus just as it
-    // dismisses native context menus (e.g. Alt+Tab to another app).
     window.addEventListener('blur', hide);
     window.addEventListener('pagehide', hide);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') hide();
-    });
-
-    // A click anywhere in the overlay that is not on the menu closes it.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') hide(); });
     root.addEventListener('mousedown', (e) => {
       const target = e.target;
       const insideMenu = target && target.closest && target.closest('.menu');
       const folderTrigger = target && target.closest && target.closest('.bm-folder-menu-trigger');
-      if (open && !insideMenu && !folderTrigger) hide();
+      if (isOpen() && !insideMenu && !folderTrigger) hide();
     }, true);
-
-    return { show, showBeside, hide, isOpen: () => open };
+    return { show, showBeside, showContext, showContextBeside, hide, isOpen };
   };
 })();
