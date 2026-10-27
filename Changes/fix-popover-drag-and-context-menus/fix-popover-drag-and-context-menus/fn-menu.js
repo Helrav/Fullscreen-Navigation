@@ -206,7 +206,7 @@
             if (it.action) it.action(e);
           });
         }
-        row.addEventListener('mousedown', (e) => e.preventDefault());
+        row.addEventListener('mousedown', (e) => { if (!it.bookmark) e.preventDefault(); });
         box.appendChild(row);
       }
     }
