@@ -140,7 +140,7 @@
         toolbarDragId = id;
         try {
           e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', 'fullnav-toolbar:' + id);
+          e.dataTransfer.setData('text/plain', 'fn-toolbar:' + id);
         } catch (_) {}
         button.classList.add('toolbar-dragging');
       });
@@ -2284,7 +2284,7 @@
 
   function build() {
     hostEl = document.createElement('div');
-    hostEl.id = 'fullnav-host';
+    hostEl.id = 'fn-host';
     hostEl.style.cssText = 'all:initial!important;position:fixed!important;top:0!important;left:0!important;width:0!important;height:0!important;z-index:2147483647!important;pointer-events:none!important';
     root = hostEl.attachShadow({ mode: 'closed' });
     addStyles(root, CSS);
@@ -2597,7 +2597,7 @@
       dragTarget = null;
       tabNode.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', 'fullnav:' + dragIds.join(','));
+      e.dataTransfer.setData('text/plain', 'fn-tabs:' + dragIds.join(','));
       const preview = h('div', 'dragimg' + (dragIds.length > 1 ? ' multi' : ''));
       const found = getTab(id);
       preview.appendChild(h('span', 'dtitle', found?.tab.title || 'Tab'));

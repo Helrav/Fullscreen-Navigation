@@ -477,8 +477,8 @@ async function bookmarkAction(message, sender) {
         return { ok: true };
 
       case 'clipboardGet': {
-        const stored = local ? await local.get('fullNavBookmarkClipboard') : {};
-        const clip = stored && stored.fullNavBookmarkClipboard;
+        const stored = local ? await local.get('fnBookmarkClipboard') : {};
+        const clip = stored && stored.fnBookmarkClipboard;
         return { ok: true, available: !!(clip && clip.item && clip.item.id), cut: !!(clip && clip.cut) };
       }
 
@@ -486,14 +486,14 @@ async function bookmarkAction(message, sender) {
         if (!local || !id) return { ok: false, reason: 'unsupported' };
         const found = await bm.getSubTree(id);
         if (!found || !found[0]) return { ok: false, reason: 'missing-bookmark' };
-        await local.set({ fullNavBookmarkClipboard: { item: found[0], cut: !!message.cut } });
+        await local.set({ fnBookmarkClipboard: { item: found[0], cut: !!message.cut } });
         return { ok: true };
       }
 
       case 'clipboardPaste': {
         if (!local || !message.parentId) return { ok: false, reason: 'missing-parent' };
-        const stored = await local.get('fullNavBookmarkClipboard');
-        const clip = stored && stored.fullNavBookmarkClipboard;
+        const stored = await local.get('fnBookmarkClipboard');
+        const clip = stored && stored.fnBookmarkClipboard;
         if (!clip || !clip.item || !clip.item.id) return { ok: false, reason: 'clipboard-empty' };
         const destination = String(message.parentId);
         const contains = (node, targetId) => String(node.id) === String(targetId)
@@ -503,7 +503,7 @@ async function bookmarkAction(message, sender) {
         if (clip.cut) {
           if (clip.item.children) await bm.removeTree(String(clip.item.id));
           else await bm.remove(String(clip.item.id));
-          await local.remove('fullNavBookmarkClipboard');
+          await local.remove('fnBookmarkClipboard');
         }
         scheduleBookmarks();
         return { ok: true };

@@ -113,7 +113,7 @@
 
   function consider(el) {
     if (!cur.length || !el || el.nodeType !== 1) return;
-    if (el === rootEl() || el === document.body || el.id === 'fullnav-host') return;
+    if (el === rootEl() || el === document.body || el.id === 'fn-host') return;
 
     let cs;
     try { cs = getComputedStyle(el); } catch (e) { return; }
