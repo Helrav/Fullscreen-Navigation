@@ -214,22 +214,35 @@
       env.send({ type: 'bookmarkAction', op: 'openFolder', id: n.id });
     }
 
-    function toItems(nodes, suppressFolderTooltips = false) {
+    function toItems(nodes, suppressFolderTooltips = false, parentId = '') {
       if (!nodes.length) return [{ label: '(empty)', disabled: true }];
-      return nodes.map((n) => (n.children
-        ? {
-            label: label(n), tooltip: suppressFolderTooltips ? null : bookmarkTooltip(n), icon: () => icon(n),
-            lazySub: () => toItems(n.children, suppressFolderTooltips), clickSub: true,
-            modifiedAction: () => openFolderInBackground(n),
-            onContext: (e) => showContextMenu(e, n)
-          }
-        : {
-            label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n),
-            action: (e) => openBm(n, e), keepOpenOnModified: true,
-            onContext: (e) => showContextMenu(e, n)
-          }));
+      return nodes.map((n, index) => {
+        // The main bookmark rows and the folder-popover rows share the same
+        // data contract with content.js so drag/drop behaves identically.
+        const bookmark = {
+          id: n.id,
+          parentId: n.parentId != null ? n.parentId : parentId,
+          index,
+          title: label(n),
+          url: n.url || '',
+          folder: !!n.children
+        };
+        return n.children
+          ? {
+              bookmark,
+              label: label(n), tooltip: suppressFolderTooltips ? null : bookmarkTooltip(n), icon: () => icon(n),
+              lazySub: () => toItems(n.children, suppressFolderTooltips, n.id), clickSub: true,
+              modifiedAction: () => openFolderInBackground(n),
+              onContext: (e) => showContextMenu(e, n)
+            }
+          : {
+              bookmark,
+              label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n),
+              action: (e) => openBm(n, e), keepOpenOnModified: true,
+              onContext: (e) => showContextMenu(e, n)
+            };
+      });
     }
-
     function showFolderMenuBeside(items, rect, side, preserveFolderHover = false) {
       if (horizontal() && env.menu.showBesideAutoVertical) {
         env.menu.showBesideAutoVertical(items, rect, side, preserveFolderHover);
@@ -249,7 +262,7 @@
       }
       openFolderMenuId = id;
       env.hideTip();
-      showFolderMenuBeside(toItems(n.children, true), button.getBoundingClientRect(), side);
+      showFolderMenuBeside(toItems(n.children, true, n.id), button.getBoundingClientRect(), side);
       // Clicking a root folder is the first intentional step into folder
       // navigation. From this point on, hovering another root folder switches
       // immediately, just like hovering another sibling inside the menu.
@@ -264,7 +277,7 @@
       openFolderMenuId = id;
       env.hideTip();
       const rect = button.getBoundingClientRect();
-      showFolderMenuBeside(toItems(n.children, true), rect, side, true);
+      showFolderMenuBeside(toItems(n.children, true, n.id), rect, side, true);
     }
 
 
