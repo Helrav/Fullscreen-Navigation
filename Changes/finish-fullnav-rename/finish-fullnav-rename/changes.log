@@ -1,0 +1,8 @@
+FullNav internal rename — workspace relocation
+
+- Move the existing workspace from Changes/name change/name change/ to Changes/finish-fullnav-rename/finish-fullnav-rename/ before applying source edits.
+- Preserve all existing source files and icon blobs during the relocation.
+- No extension source behavior is changed in this relocation commit; the internal rename follows in the next commit.
+- Keep changes.log scoped to this task and overwrite it rather than appending.
+
+Validation: relocation prepared on branch Test; source edits pending.
