@@ -1,0 +1,8 @@
+Continue and finish DeepSeek's horizontal-window popover work
+
+- Relocate the current unfinished workspace from Changes/fix-broken-horizontal-overlay/fix-broken-horizontal-overlay/ to Changes/complete-horizontal-popover-features/complete-horizontal-popover-features/ before editing.
+- Preserve all current DeepSeek changes, including popover state/pinning, horizontal rail controls, bookmark drag plumbing, options changes, and binary icons.
+- Continue the attached task list: right-click context menus and popover alignment, current-window naming, full tab interactions in the popover, aligned divider/edge corner styling, horizontal bookmark tooltips, and bookmark drag/drop/reordering.
+- Keep branch Test only. Overwrite this task's changes.log rather than appending.
+
+Validation: workspace relocation only; feature completion follows.
