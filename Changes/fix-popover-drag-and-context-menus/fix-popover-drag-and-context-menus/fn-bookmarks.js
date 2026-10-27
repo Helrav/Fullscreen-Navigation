@@ -222,7 +222,7 @@
         const bookmark = {
           id: n.id,
           parentId: n.parentId != null ? n.parentId : parentId,
-          index,
+          index: Number.isInteger(n.index) ? n.index : index,
           title: label(n),
           url: n.url || '',
           folder: !!n.children
@@ -451,7 +451,7 @@
           openMoreMenu = true;
           openFolderMenuId = null;
           const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
-          showFolderMenuBeside(toItems(data.bar.slice(cut)), more.getBoundingClientRect(), side);
+          showFolderMenuBeside(toItems(data.bar.slice(cut), false, data.barId), more.getBoundingClientRect(), side);
         };
       };
       fitSoon();
@@ -891,7 +891,7 @@
       if (!data || openFolderMenuId === null || !env.menu.isMainOpen || !env.menu.isMainOpen()) return;
       const node = findNode(allTop(), openFolderMenuId);
       if (!node || !node.children) return;
-      env.menu.rebuildMain(toItems(node.children, true));
+      env.menu.rebuildMain(toItems(node.children, true, node.id));
     }
 
     let treeSig = '', reloadQueued = false;
