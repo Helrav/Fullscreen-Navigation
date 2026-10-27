@@ -25,7 +25,6 @@ const TP_DEFAULTS = {
   closeDelayMs: 350,
   closeOnPick: true,
   searchIn: 'newtab',        // newtab | current
-  undoSeconds: 8,
   // Bookmarks
   bookmarks: false,
   bookmarksMode: 'card',     // card | strip (left/right overlays)
@@ -46,13 +45,13 @@ function tpNormalize(stored) {
   if (s.style === 'box') s.style = 'windowed';
   if (!s.winRect && s.boxRect) s.winRect = s.boxRect;
   delete s.boxRect;
+  delete s.undoSeconds;
   if (!['docked', 'windowed'].includes(s.style)) s.style = 'docked';
   if (!['left', 'right', 'top', 'bottom'].includes(s.edge)) s.edge = 'left';
   if (!['newtab', 'current'].includes(s.searchIn)) s.searchIn = 'newtab';
   if (!['card', 'strip'].includes(s.bookmarksMode)) s.bookmarksMode = 'card';
   if (!['auto', 'left', 'right', 'top', 'bottom'].includes(s.floatingBookmarksEdge)) s.floatingBookmarksEdge = 'auto';
   if (![null, -36, 0, 36].includes(s.floatingBookmarksDockOffset)) s.floatingBookmarksDockOffset = null;
-  s.undoSeconds = tpClamp(Number(s.undoSeconds) || 8, 2, 30);
   s.zoneLength = tpClamp(Number(s.zoneLength) || 40, 5, 100);
   s.zoneStart = tpClamp(Number(s.zoneStart) || 0, 0, 100 - s.zoneLength);
   s.zoneThickness = tpClamp(Number(s.zoneThickness) || 8, 1, 40);
