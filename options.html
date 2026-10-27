@@ -52,11 +52,14 @@
       <input type="checkbox" data-key="showNames"></label>
     <label class="row"><span class="name">Theme</span>
       <select data-key="theme"><option value="auto">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-    <label class="row"><span class="name">Accent color</span><input type="color" data-key="accent"></label>
+    <label class="row" data-theme-off><span class="name">Accent color</span><input type="color" data-key="accent"></label>
+    <label class="row"><span class="name">Theme color<small>Tints the panel, menus and settings with shades of one color: deeper toolbar, lighter menus, matching highlights. Follows Light / Dark above.</small></span><input type="checkbox" data-key="themeTint"></label>
+    <label class="row" data-theme-tint><span class="name">Color</span><input type="color" data-key="themeColor"></label>
     <label class="row"><span class="name">Search box</span><input type="checkbox" data-key="showSearch"></label>
     <label class="row"><span class="name">Search opens in</span><select data-key="searchIn"><option value="newtab">New tab</option><option value="current">Current tab</option></select></label>
     <label class="row"><span class="name">Show bookmark panel<small>Uses your browser bookmarks; opens beside the overlay.</small></span><input type="checkbox" data-key="bookmarks"></label>
     <label class="row" data-bookmarks-mode><span class="name">Vertical bookmarks display</span><select data-key="bookmarksMode"><option value="card">Card with names</option><option value="strip">Icons only</option></select></label>
+    <label class="row" data-bookmarks-on><span class="name">Custom folder icons only in vertical list<small>Right-click a bookmark folder, then Folder icon, to pick a color, symbol or emoji. Turn this on to show them only while bookmarks are vertical.</small></span><input type="checkbox" data-key="folderIconsVerticalOnly"></label>
     <div class="row"><span class="name">Panel size and position<small>Clears any size or position set by dragging the overlay.</small></span>
       <button id="resetSize" type="button" class="btn-plain">Reset size</button></div>
   </section>
@@ -68,6 +71,9 @@
     <label class="row"><span class="name">Close delay<small>How long it waits after the mouse leaves.</small></span>
       <span class="ctl"><input type="range" data-key="closeDelayMs" min="0" max="1500" step="50"><output data-out="closeDelayMs" data-unit=" ms"></output></span></label>
     <label class="row"><span class="name">Close after choosing a tab</span><input type="checkbox" data-key="closeOnPick"></label>
+    <label class="row"><span class="name">Collapse windows separately<small>Collapsing a window only affects the overlay in the window you collapsed it from. Other windows keep their own view.</small></span><input type="checkbox" data-key="perWindowCollapse"></label>
+    <label class="row"><span class="name">Fullscreen new windows<small>Windows opened, or tabs moved to a new window, from Tab Peek open in fullscreen.</small></span><input type="checkbox" data-key="newWindowFullscreen"></label>
+    <label class="row"><span class="name">Open in the background<small>Opening a bookmark in a new tab or window, or moving tabs to a new window, does not switch to it.</small></span><input type="checkbox" data-key="openInBackground"></label>
   </section>
 
   <footer>
