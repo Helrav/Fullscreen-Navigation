@@ -523,7 +523,6 @@ globalThis.FNX.CSS = `
   background:var(--bg);color:var(--accent);box-shadow:0 5px 18px rgba(0,0,0,.32);pointer-events:none
 }
 .bm-drag-preview svg{width:23px;height:23px;fill:currentColor}
-`;
 
 
 /* ---------- horizontal layout: compact strip + expanded multirow tabs ---------- */
@@ -623,3 +622,4 @@ globalThis.FNX.CSS = `
   padding:4px 10px;
   border:0;
 }
+`;

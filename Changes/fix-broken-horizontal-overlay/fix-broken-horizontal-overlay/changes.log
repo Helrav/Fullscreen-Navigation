@@ -1,9 +1,8 @@
-Fix broken horizontal overlay after first-pass redesign
+Fix broken horizontal overlay — CSS template literal repaired
 
-- Relocate the existing workspace from Changes/improve-horizontal-overlay/improve-horizontal-overlay/ to Changes/fix-broken-horizontal-overlay/fix-broken-horizontal-overlay/ before applying the repair.
-- Preserve every existing source file and icon blob during relocation.
-- Reported issue: extension broken after the horizontal overlay CSS was appended outside the FNX.CSS template literal in fn-css.js.
-- Repair will restore valid JavaScript by placing the horizontal layout rules inside the CSS template literal, then rerun syntax and manifest-reference checks.
-- Overwrite this task log rather than appending.
+- Root cause: horizontal layout CSS had been appended after the closing template literal in fn-css.js, making the extension's injected stylesheet JavaScript invalid.
+- Rebuilt fn-css.js from the last valid version and inserted the horizontal layout rules before the CSS template's closing backtick, keeping the entire stylesheet inside FNX.CSS.
+- Preserved the existing content.js changes and all icons/assets; this repair does not add new behavior beyond making the prior CSS load correctly.
+- Workspace: Changes/fix-broken-horizontal-overlay/fix-broken-horizontal-overlay/.
 
-Validation: relocation commit only; source repair follows.
+Validation: fn-css.js and content.js pass JavaScript syntax parsing; CSS braces, quotes and comments are balanced; manifest JSON parses and all referenced content scripts exist. No live browser UI test was run.
