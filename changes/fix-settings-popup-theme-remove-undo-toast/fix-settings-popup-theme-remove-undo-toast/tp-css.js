@@ -292,11 +292,6 @@ globalThis.TPX.CSS = `
 .tip .t1{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tip .t2{margin-top:1px;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* ---------- undo message ---------- */
-.toast{position:fixed;zoom:var(--u,1);z-index:15;display:none;align-items:center;gap:12px;padding:8px 8px 8px 14px;border-radius:10px;background:var(--fg);color:var(--bg);box-shadow:0 8px 24px rgba(0,0,0,.35);white-space:nowrap}
-.toast.on{display:flex}
-.toast button{height:26px;padding:0 12px;border:0;border-radius:7px;background:var(--accent);color:#fff;font:600 12px/1 system-ui,sans-serif;cursor:pointer}
-
 /* ---------- settings card + rename prompt ---------- */
 .backdrop{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.32);pointer-events:auto;touch-action:none;overscroll-behavior:contain}
 .card,.prompt{position:fixed;zoom:var(--u,1);z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:14px;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 24px 64px rgba(0,0,0,.45);overflow:hidden;pointer-events:auto}
