@@ -1,9 +1,15 @@
-Fix: moving a tab you are not looking at to a new window must not take focus from your page
+Rename: extension is now "Fullscreen Navigation" (short name "FullNav")
 
-- Cause: for a tab that is not the one on screen, the new window was created unfocused but was then switched to fullscreen right away. Changing the state of an unfocused window makes the browser/OS activate it, which pulled focus off the page you were on. Handing focus back restored the window but not the page inside it, so hover and keys did nothing until you clicked.
-- background.js: windows you are not going to (tabs other than the visible one, bookmarks opened in a new window while "Open in the background" is on) are no longer switched to fullscreen at creation. They are remembered (storage.session, falling back to storage.local) and made fullscreen the first time you focus them, through a windows.onFocusChanged listener. Entries are dropped when the window closes and cleared on browser start.
-- background.js: the window you ARE going to (the visible tab is moved, or a blank new window) is still made fullscreen immediately, as before.
-- background.js: returnFocusTo() now checks that the source window really kept focus and retries up to 3 times, in addition to the existing focus, short wait, focus again, re-activate tab and tp-refocus steps.
-- Unchanged: the current-tab gate in moveTabsToNewWindow(), the tp-refocus listener in content.js, and every other file in this folder.
+Applied in this folder:
+- manifest.json: name "Fullscreen Navigation", new short_name "FullNav", new description, toolbar title "FullNav settings", Firefox id fullnav@example.com.
+- options.html: page title "FullNav settings", heading "Fullscreen Navigation", and the "Fullscreen new windows" help text now says FullNav.
+- README.md: title and text renamed.
 
-Validation: background.js size checked against the expected edit (42982 bytes). No live Chrome UI test was run.
+NOT applied (needs a git/sed pass, the GitHub tools used here cannot rename files):
+- tp-*.js files -> fn-*.js, including the file list in manifest.json.
+- Identifier and string prefixes: tpXxx -> fnXxx, TP_ -> FN_, TPX -> FNX, 'tp-refocus' -> 'fn-refocus'.
+- Remaining "Tab Peek" / tab-peek / tabPeek strings inside content.js, tp-*.js and background.js (for example the settings card title, the tab-peek-host element id and the tabPeekBookmarkClipboard storage key).
+- Folder rename to reflect this change.
+Until that pass is run the extension still loads, because manifest.json still points at the existing tp-*.js file names.
+
+Validation: manifest.json, options.html and README.md sizes match the expected edits. No live Chrome UI test was run.
