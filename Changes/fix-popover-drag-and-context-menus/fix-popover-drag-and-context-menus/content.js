@@ -3329,6 +3329,14 @@
       bookmarkDropTarget = null;
       clearBookmarkMarks();
     };
+    const isBookmarkMenuArea = (node) => {
+      if (!node || !node.closest) return false;
+      const menu = node.closest('.menu, .submenu');
+      return !!(menu && menu.querySelector('[data-bm-id]'));
+    };
+    const isBookmarkDragArea = (node) => !!(node && node.closest && (
+      node.closest('.windowbookmarks, .bm, .panel, .winpop') || isBookmarkMenuArea(node)
+    ));
     const bookmarkDropInfo = (e) => {
       const item = e.target.closest && e.target.closest('[data-bm-id]');
       if (item) {
@@ -3441,13 +3449,12 @@
     }
     function bookmarkDragOver(e) {
       if (!bookmarkDrag) return;
-      const target = (e.target.closest && (e.target.closest('.windowbookmarks, .bm, .panel, .winpop')))
-        ? bookmarkDropInfo(e) : null;
+      const target = isBookmarkDragArea(e.target) ? bookmarkDropInfo(e) : null;
       if (!target) {
         clearMarks();
         clearBookmarkMarks();
         bookmarkDropTarget = null;
-        if (e.target.closest && (e.target.closest('.bm') || e.target.closest('.panel') || e.target.closest('.winpop'))) e.preventDefault();
+        if (isBookmarkDragArea(e.target)) e.preventDefault();
         return;
       }
       e.preventDefault();
