@@ -1065,6 +1065,18 @@
     }], e.clientX, e.clientY, undefined, true);
   }
 
+  async function showWinPopEmptyMenu(e) {
+    if (!contextMenu) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const reopen = await getReopenMenuItem();
+    contextMenu.showContext([
+      { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId: data.cur }) },
+      { label: 'New window', shortcut: 'Ctrl+N', action: () => send({ type: 'newWindow' }) },
+      reopen
+    ], e.clientX, e.clientY);
+  }
+
   function setWinPopIcons(on, persist = true) {
     winPopIcons = !!on;
     if (persist) {
@@ -1582,17 +1594,23 @@
     contextMenu.showContext(items, x, y);
   }
 
-  async function showWindowMenu(windowId, x, y) {
+  async function showWindowMenu(windowId, x, y, fromWinPop = false) {
     const win = (data.windows || []).find((item) => item.id === windowId);
     if (!win || !contextMenu) return;
     const reopen = await getReopenMenuItem();
+    const isCollapsed = fromWinPop
+      ? isWinPopWindowCollapsed(windowId)
+      : !!collapsed[collapseKey('w' + windowId)];
     contextMenu.showContext([
       { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
       reopen,
       { label: 'Bookmark all tabs…', shortcut: 'Ctrl+Shift+D', disabled: !win.tabs.length, action: () => pickBookmarkFolder(win.tabs.map((tab) => tab.id)) },
       { sep: true },
       { label: 'Name window…', action: () => promptText('Name window', win.name || '', (name) => send({ type: 'renameWindow', windowId, name })) },
-      { label: collapsed[collapseKey('w' + windowId)] ? 'Expand' : 'Collapse', action: () => toggleCollapse('w' + windowId) },
+      {
+        label: isCollapsed ? 'Expand' : 'Collapse',
+        action: () => fromWinPop ? toggleWinPopCollapse(windowId) : toggleCollapse('w' + windowId)
+      },
       { sep: true },
       { label: 'Close', shortcut: 'Alt+F4', danger: true, action: () => send({ type: 'closeWindow', windowId }) }
     ], x, y);
@@ -2592,6 +2610,7 @@
     const move = (ev) => {
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       if (!moved && Math.hypot(dx, dy) < 5) return;
+      if (!moved && winPopOpen) closeWinPop();
       moved = true;
       hotZoneEditMode = false;
       updateHintVisibility();
@@ -2681,6 +2700,7 @@
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       if (!moved && Math.hypot(dx, dy) < 3) return;
       if (!moved) {
+        if (winPopOpen) closeWinPop();
         els.panel.classList.add('moving', 'dragging-overlay');
         if (bookmarks) bookmarks.el.classList.add('dragging-overlay');
         if (els.dragPreview) els.dragPreview.style.display = 'grid';
@@ -2986,8 +3006,14 @@
         showTabMenu(Number(tabNode.dataset.id), e.clientX, e.clientY);
         return;
       }
-      // Background/header context configures popover placement; tab menus stay tab-specific.
-      showWinPopPositionMenu(e);
+      const windowNode = e.target.closest && e.target.closest('.whead');
+      if (windowNode) {
+        e.preventDefault();
+        e.stopPropagation();
+        showWindowMenu(Number(windowNode.dataset.win), e.clientX, e.clientY, true);
+        return;
+      }
+      showWinPopEmptyMenu(e);
     });
     els.winPop.addEventListener('mouseover', (e) => {
       const node = e.target.closest && e.target.closest('.tab,.whead');

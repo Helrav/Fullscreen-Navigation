@@ -1,0 +1,7 @@
+Fix Other windows popover drag visibility and context menus
+
+- Close the Other windows popover once the overlay drag actually starts, for both docked-rail and floating-window moves. A click without movement does not dismiss it.
+- Right-clicking blank space in the popover now offers New tab, New window, and the standard reopen-last-closed action instead of the popover-position menu.
+- Right-clicking a popover window header/icon now opens the same window context menu as vertical mode. Its Collapse/Expand item reads and updates that popover window's own collapse state.
+
+Validation: content.js passes JavaScript syntax parsing; targeted source checks confirm all three context-menu paths and both drag paths are wired. No live Chrome UI test was run.
