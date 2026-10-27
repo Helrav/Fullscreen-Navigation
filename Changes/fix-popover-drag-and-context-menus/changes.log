@@ -1,11 +1,11 @@
-Fix Other windows popover drag visibility and context menus; support bookmark dragging inside folders
+Fix popover closing, nested bookmark dragging, and tab tooltip placement
 
-- Close the Other windows popover once the overlay drag actually starts, for both docked-rail and floating-window moves. A click without movement does not dismiss it.
-- Right-clicking blank space in the popover now offers New tab, New window, and the standard reopen-last-closed action instead of the popover-position menu.
-- Right-clicking a popover window header/icon now opens the same window context menu as vertical mode. Its Collapse/Expand item reads and updates that popover window's own collapse state.
-- Bookmark entries and folders in root folder popovers and recursively opened submenus now carry the same drag metadata as root bookmark items.
-- Folder popovers are accepted as bookmark drag/drop targets, so existing bookmark-tree reorder logic also works within folders and nested folders.
-- Folder popovers, submenus, and context menus are hidden while the overlay is being dragged.
-- Added matching drag-source and drop-position feedback to menu-based bookmark entries.
+- Close the Other windows popover, bookmark folder popovers, nested folder submenus, and context menus when an overlay drag crosses its movement threshold. A click without movement does not dismiss them.
+- Right-clicking blank space in the Other windows popover offers New tab, New window, and the standard reopen-last-closed action instead of the popover-position menu.
+- Right-clicking a popover window header/icon opens the same window context menu as vertical mode. Its Collapse/Expand item reads and updates that popover window's own collapse state.
+- Bookmark entries and folders inside root folder popovers and recursively opened submenus carry the same drag metadata as root bookmark items.
+- Allow native dragging from bookmark rows in menus and support the existing bookmark-tree reorder handling inside folder popovers and nested folders.
+- Add source/drop position feedback to menu-based bookmark entries.
+- Position tab tooltips outside the strip: below a top rail, above a bottom rail, right of a left vertical rail, left of a right vertical rail. The Other windows popover and windowed overlay choose the outside side based on their actual position.
 
-Validation: edited JavaScript files pass syntax parsing; targeted source checks confirm nested bookmark metadata and folder-menu drop handling. No live Chrome UI test was run.
+Validation: edited JavaScript files pass syntax parsing. No live Chrome UI test was run. Live bookmark synchronization was not changed.
