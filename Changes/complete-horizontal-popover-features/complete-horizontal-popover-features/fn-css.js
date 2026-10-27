@@ -277,7 +277,10 @@ globalThis.FNX.CSS = `
 .winbtn[hidden]{display:none!important}
 .panel[data-dir=h] .winbtn{
   flex:none;align-self:center;width:32px;height:26px;margin:0 4px 0 0;
-  border-left:1px solid var(--line);border-radius:0 7px 7px 0;color:var(--muted);
+  border-left:1px solid var(--line);border-right:0;border-radius:0 7px 7px 0;color:var(--muted);
+}
+.panel[data-dir=h] .winbtn[data-align=left]{
+  margin:0 0 0 4px;border-left:0;border-right:1px solid var(--line);border-radius:7px 0 0 7px;
 }
 .panel[data-dir=h] .winbtn .window-icon{width:16px;height:16px;opacity:.82}
 .panel[data-dir=h] .winbtn:hover,.panel[data-dir=h] .winbtn.on{color:var(--fg)}
@@ -306,9 +309,14 @@ globalThis.FNX.CSS = `
   overflow:hidden;
 }
 .winpop.hidden{display:none}
-.winpop[data-side=top]{border-top:0;border-radius:0 0 12px 12px}
-.winpop[data-side=bottom]{border-bottom:0;border-radius:12px 12px 0 0;flex-direction:column-reverse}
+.winpop[data-side=top]{border-top:1px solid var(--line);border-radius:0 0 12px 12px}
+.winpop[data-side=bottom]{border-bottom:1px solid var(--line);border-radius:12px 12px 0 0;flex-direction:column-reverse}
 .winpop[data-side=bottom] .winpophead{border-bottom:0;border-top:1px solid var(--line)}
+/* The edge joined to the screen is square; the opposite outer corner stays rounded. */
+.winpop[data-side=top][data-align=left]{border-radius:0 0 12px 0}
+.winpop[data-side=top][data-align=right]{border-radius:0 0 0 12px}
+.winpop[data-side=bottom][data-align=left]{border-radius:0 12px 0 0}
+.winpop[data-side=bottom][data-align=right]{border-radius:12px 0 0 0}
 .winpophead{
   /* The bookmark bar is 36px tall; matching it puts the header divider on the
      same line as the bar's lower edge. */
@@ -378,6 +386,10 @@ globalThis.FNX.CSS = `
 /* ---------- context menu ---------- */
 .menu,.submenu{min-width:190px;padding:5px;border-radius:10px;background:var(--bg2,var(--bg));color:var(--fg);box-shadow:0 0 0 1px var(--line),0 12px 32px rgba(0,0,0,.32);user-select:none;pointer-events:auto;touch-action:manipulation}
 .menu{position:fixed;zoom:var(--u,1);z-index:2147483000}
+/* The one-item position menu should not reserve the normal menu's icon gutter. */
+.menu.compact-context{min-width:0;width:max-content;max-width:calc(100vw - 8px);padding:3px}
+.menu.compact-context .mi{gap:4px;padding:6px 8px}
+.menu.compact-context .mlead{display:none}
 .submenu{display:none;position:absolute;top:-6px;left:calc(100% - 4px);z-index:2147483001}
 .submenu.flip{left:auto;right:calc(100% - 4px)}
 .menu.scroll,.submenu.scroll{max-height:70vh;overflow-y:auto;scrollbar-width:thin}

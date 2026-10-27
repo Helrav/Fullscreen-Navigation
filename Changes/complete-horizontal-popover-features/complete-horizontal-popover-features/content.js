@@ -992,6 +992,7 @@
   function syncWinButton() {
     const btn = els.winBtn;
     if (!btn) return;
+    syncWinButtonPlacement();
     const wins = data.windows || [];
     const others = wins.filter((w) => w.id !== data.cur).length;
     const show = !isBox() && !isVertical()
@@ -1012,8 +1013,18 @@
   function winPopSide() { return settings.edge === 'bottom' ? 'bottom' : 'top'; }
   function winPopAlign() { return settings.winPopAlign === 'left' ? 'left' : 'right'; }
 
+  function syncWinButtonPlacement() {
+    if (!els.panel || !els.winBtn || !els.scrollPrev || !els.edgeTools) return;
+    const align = winPopAlign();
+    els.winBtn.dataset.align = align;
+    const anchor = align === 'left' ? els.scrollPrev : els.edgeTools;
+    if (els.winBtn.parentNode === els.panel && els.winBtn.nextSibling === anchor) return;
+    els.panel.insertBefore(els.winBtn, anchor);
+  }
+
   function setWinPopAlign(align) {
     settings.winPopAlign = align === 'left' ? 'left' : 'right';
+    syncWinButtonPlacement();
     saveSettings();
     if (winPopOpen) {
       positionWinPop();
@@ -1023,6 +1034,17 @@
 
   function toggleWinPopAlign() {
     setWinPopAlign(winPopAlign() === 'left' ? 'right' : 'left');
+  }
+
+  function showWinPopPositionMenu(e) {
+    if (!contextMenu) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const left = winPopAlign() === 'left';
+    contextMenu.showContext([{
+      label: left ? 'Position other windows to the right' : 'Position other windows to the left',
+      action: toggleWinPopAlign
+    }], e.clientX, e.clientY, undefined, true);
   }
 
   function setWinPopIcons(on) {
@@ -1219,7 +1241,8 @@
 
   function winPopBookmarkStart() {
     if (!winPopOpen || !els.winPop || !els.panel || winPopAlign() !== 'left') return 0;
-    return Math.max(0, (els.winPop.getBoundingClientRect().left - els.panel.getBoundingClientRect().left) / (u || 1));
+    // When aligned left, bookmarks begin after the popover's right edge.
+    return Math.max(0, (els.winPop.getBoundingClientRect().right - els.panel.getBoundingClientRect().left) / (u || 1));
   }
 
   function visibleIds() {
@@ -1491,7 +1514,7 @@
     if (current) {
       items.push({ sep: true });
       items.push({
-        label: 'Name this window…',
+        label: 'Name this window',
         action: () => promptText('Name window', current.name || '', (name) => send({ type: 'renameWindow', windowId: current.id, name }))
       });
     }
@@ -2763,17 +2786,7 @@
       toggleWinPop();
     });
     els.winBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-    els.winBtn.addEventListener('contextmenu', (e) => {
-      if (!contextMenu) return;
-      e.preventDefault();
-      const left = winPopAlign() === 'left';
-      contextMenu.showContext([
-        {
-          label: left ? 'Position other windows to the right' : 'Position other windows to the left',
-          action: toggleWinPopAlign
-        }
-      ], e.clientX, e.clientY);
-    });
+    els.winBtn.addEventListener('contextmenu', showWinPopPositionMenu);
     els.edgeTools = h('div', 'edge-tools');
     applyToolbarOrder();
     setupToolbarReordering();
@@ -2803,6 +2816,7 @@
     els.list = h('div', 'list');
     els.list.addEventListener('scroll', updateScrollButtons, { passive: true });
     els.panel.append(top, els.scrollPrev, els.list, els.scrollNext, els.winBtn, els.edgeTools);
+    syncWinButtonPlacement();
     els.sizeBadge = h('div', 'sizebadge', '');
     els.panel.appendChild(els.sizeBadge);
     els.resizeBuffer = h('div', 'resize-buffer');
@@ -2908,14 +2922,14 @@
     });
     els.winPop.addEventListener('contextmenu', (e) => {
       const tabNode = e.target.closest && e.target.closest('.tab');
-      const winNode = e.target.closest && e.target.closest('.whead');
       if (tabNode) {
         e.preventDefault();
+        e.stopPropagation();
         showTabMenu(Number(tabNode.dataset.id), e.clientX, e.clientY);
-      } else if (winNode) {
-        e.preventDefault();
-        showWindowMenu(Number(winNode.dataset.win), e.clientX, e.clientY);
+        return;
       }
+      // Background/header context configures popover placement; tab menus stay tab-specific.
+      showWinPopPositionMenu(e);
     });
     els.winPop.addEventListener('mouseover', (e) => {
       const node = e.target.closest && e.target.closest('.tab,.whead');
@@ -3396,6 +3410,7 @@
       const t = e.target;
       if (t === hostEl || (t && t.closest && t.closest('#fn-host'))) return;
       e.preventDefault();
+      e.stopPropagation();
       const source = bookmarkDrag;
       clearBookmarkDrag();
       void openBookmarkAt(source, { windowId: data.cur, tabId: null, pos: 'end' });

@@ -222,10 +222,12 @@
       if (env.onOpen) env.onOpen();
       place(el, x, y, side);
     }
-    function showContext(items, x, y, side) {
+    function showContext(items, x, y, side, compact = false) {
       hideContext();
       if (!items.length) return;
-      contextEl = build(items, 'menu context-menu', 'context'); ui.appendChild(contextEl); contextOpen = true;
+      contextEl = build(items, 'menu context-menu', 'context');
+      if (compact) contextEl.classList.add('compact-context');
+      ui.appendChild(contextEl); contextOpen = true;
       if (env.onOpen) env.onOpen();
       place(contextEl, x, y, side);
     }

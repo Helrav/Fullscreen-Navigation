@@ -300,8 +300,8 @@ async function bookmarksTree() {
   const root = (await api.bookmarks.getTree())[0];
   if (!root) return { barId: null, bar: [], other: [] };
   const mapNode = (node) => node.url
-    ? { id: node.id, parentId: node.parentId, title: typeof node.title === 'string' ? node.title : '', url: node.url }
-    : { id: node.id, parentId: node.parentId, title: node.title || 'Folder', children: (node.children || []).map(mapNode) };
+    ? { id: node.id, parentId: node.parentId, index: node.index, title: typeof node.title === 'string' ? node.title : '', url: node.url }
+    : { id: node.id, parentId: node.parentId, index: node.index, title: node.title || 'Folder', children: (node.children || []).map(mapNode) };
   let bar = null;
   let other = null;
   for (const child of root.children || []) {
@@ -311,7 +311,10 @@ async function bookmarksTree() {
   if (!bar) bar = (root.children || [])[0] || null;
   return {
     barId: bar ? bar.id : null,
+    barParentId: bar ? (bar.parentId || root.id) : root.id,
     otherId: other ? other.id : null,
+    otherParentId: other ? (other.parentId || root.id) : root.id,
+    otherIndex: other && Number.isInteger(other.index) ? other.index : (root.children || []).indexOf(other),
     bar: bar ? (bar.children || []).map(mapNode) : [],
     other: other ? (other.children || []).map(mapNode) : []
   };
@@ -390,6 +393,66 @@ async function bookmarkAction(message, sender) {
     switch (op) {
       case 'capabilities':
         return { ok: true, splitView: typeof api.tabs.createSplit === 'function', tabGroups: typeof api.tabs.group === 'function' };
+
+      case 'move': {
+        if (!id || message.parentId == null || typeof bm.move !== 'function') return { ok: false, reason: 'missing-destination' };
+        const found = await bm.getSubTree(id);
+        const source = found && found[0];
+        const parentFound = await bm.getSubTree(String(message.parentId));
+        const destination = parentFound && parentFound[0];
+        if (!source || !destination || !Array.isArray(destination.children)) return { ok: false, reason: 'missing-bookmark-or-folder' };
+        const contains = (node, targetId) => String(node.id) === String(targetId)
+          || (node.children || []).some((child) => contains(child, targetId));
+        if (contains(source, destination.id)) return { ok: false, reason: 'move-into-self' };
+        const details = { parentId: String(message.parentId) };
+        if (Number.isInteger(message.index)) details.index = Math.max(0, message.index);
+        await bm.move(id, details);
+        scheduleBookmarks();
+        return { ok: true };
+      }
+
+      case 'openAt': {
+        const found = id ? await bm.getSubTree(id) : [];
+        const node = found && found[0];
+        if (!node) return { ok: false, reason: 'missing-bookmark' };
+        const allowedUrl = (value) => /^(https?|ftp|file|about|chrome|edge|brave|vivaldi|opera):/i.test(String(value || ''))
+          && !/^javascript:/i.test(String(value || ''));
+        const urls = [];
+        const collectUrls = (item) => {
+          if (!item) return;
+          if (item.url) {
+            if (allowedUrl(item.url)) urls.push(item.url);
+            return;
+          }
+          for (const child of item.children || []) collectUrls(child);
+        };
+        collectUrls(node);
+        if (!urls.length) return { ok: false, reason: 'no-bookmarkable-url' };
+
+        let targetWindowId = Number.isInteger(message.windowId)
+          ? message.windowId
+          : (senderTab && Number.isInteger(senderTab.windowId) ? senderTab.windowId : null);
+        let anchor = null;
+        if (Number.isInteger(message.targetTabId)) {
+          anchor = await api.tabs.get(message.targetTabId).catch(() => null);
+          if (anchor) targetWindowId = anchor.windowId;
+        }
+        if (!Number.isInteger(targetWindowId)) return { ok: false, reason: 'missing-target-window' };
+        const startIndex = anchor ? anchor.index + (message.pos === 'after' ? 1 : 0) : null;
+        const opened = [];
+        for (let i = 0; i < urls.length; i++) {
+          const details = { windowId: targetWindowId, url: urls[i], active: false };
+          if (Number.isInteger(startIndex)) details.index = startIndex + i;
+          const tab = await api.tabs.create(details);
+          if (tab && Number.isInteger(tab.id)) opened.push(tab);
+        }
+        if (!opened.length) return { ok: false, reason: 'no-tabs-opened' };
+        // Activate the first opened tab so dragging a bookmark onto the page or
+        // a window/tab always takes the user to the result.
+        await api.tabs.update(opened[0].id, { active: true }).catch(() => {});
+        if (message.focusWindow !== false) await api.windows.update(targetWindowId, { focused: true }).catch(() => {});
+        return { ok: true, count: opened.length, tabId: opened[0].id };
+      }
 
       case 'openTab':
         if (!url) return { ok: false, reason: 'missing-url' };

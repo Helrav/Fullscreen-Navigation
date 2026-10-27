@@ -1,8 +1,11 @@
 Continue and finish DeepSeek's horizontal-window popover work
 
-- Relocate the current unfinished workspace from Changes/fix-broken-horizontal-overlay/fix-broken-horizontal-overlay/ to Changes/complete-horizontal-popover-features/complete-horizontal-popover-features/ before editing.
-- Preserve all current DeepSeek changes, including popover state/pinning, horizontal rail controls, bookmark drag plumbing, options changes, and binary icons.
-- Continue the attached task list: right-click context menus and popover alignment, current-window naming, full tab interactions in the popover, aligned divider/edge corner styling, horizontal bookmark tooltips, and bookmark drag/drop/reordering.
-- Keep branch Test only. Overwrite this task's changes.log rather than appending.
+- Preserved DeepSeek's popover state/pinning, cross-window tab selection and drag handlers, rail controls, bookmark drag source/target handling, options, and icons.
+- The Other windows button now moves to the selected left/right side with the popover, and the bookmark bar's start offset is measured from the popover's right edge when aligned left.
+- Restored the rail/popover seam border and made only the screen-edge corner square.
+- Right-clicking the popover background or header now opens a compact one-action position menu; right-clicking a tab still opens its tab menu. The current-window-only context menu now says “Name this window”.
+- Horizontal bookmark tooltips use pointer enter/leave handlers.
+- Fixed the missing forEach closure in DeepSeek's fn-bookmarks.js.
+- Added background bookmark move/openAt operations for true browser-bookmark reordering and opening a bookmark/folder at the drop target, activating the first opened tab and focusing the target window when requested.
 
-Validation: workspace relocation only; feature completion follows.
+Validation: the five edited JavaScript files pass syntax parsing; CSS template literal and braces are balanced. Manifest references and unrelated files are unchanged. No live browser UI test was run.

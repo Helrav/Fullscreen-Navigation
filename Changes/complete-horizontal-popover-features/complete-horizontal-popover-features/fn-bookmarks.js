@@ -74,14 +74,14 @@
     function attachBookmarkTooltip(target, n, preferredSide) {
       const tip = bookmarkTooltip(n);
       if (!tip.title || !env.tip) return;
-      target.addEventListener('mouseenter', () => {
+      target.addEventListener('pointerenter', () => {
         if (isOpenRootFolder(n)) {
           if (env.hideTip) env.hideTip();
           return;
         }
         env.tip(target.getBoundingClientRect(), tip.title, tip.detail, preferredSide || bookmarkTooltipSide());
       });
-      target.addEventListener('mouseleave', () => { if (env.hideTip) env.hideTip(); });
+      target.addEventListener('pointerleave', () => { if (env.hideTip) env.hideTip(); });
     }
 
     // Bookmark drag handling lives in content.js; these attributes are the
@@ -530,7 +530,7 @@
         }
         row.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         list.appendChild(row);
-      }
+      });
       if (!list.childNodes.length) list.appendChild(h('div', 'bmr bmempty', 'No bookmarks yet'));
       content.append(head, list);
     }
