@@ -1,0 +1,5 @@
+Correction: scope is the page currently visible in the source window, not every selected tab.
+
+- Rename the existing workspace before correcting the tab-move behavior.
+- Pending correction: only keep/focus the destination window when the currently visible source tab is among the tabs being moved. Moving only inactive/background tabs must not switch the user away from their current window.
+- Re-check why Chrome's native bookmarks bar can still appear during this move path; do not treat fullscreen as fixed without verifying how the moved-tab window is created and focused.
