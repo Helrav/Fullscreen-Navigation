@@ -46,6 +46,23 @@
     if (boxNote) boxNote.hidden = !box;
     const bmMode = document.querySelector('[data-bookmarks-mode]');
     if (bmMode) bmMode.hidden = !settings.bookmarks || !vertical;
+    document.querySelectorAll('[data-custom-colors]').forEach((row) => { row.hidden = !settings.customColors; });
+  }
+
+  // Optional custom colours for the settings page, matching the overlay.
+  function applyCustomColors() {
+    const st = document.documentElement.style;
+    if (!settings.customColors) {
+      ['--bg', '--card', '--fg', '--muted', '--line'].forEach((name) => st.removeProperty(name));
+      return;
+    }
+    const bg = settings.customBg, fg = settings.customFg;
+    st.setProperty('--card', bg);
+    st.setProperty('--bg', 'color-mix(in srgb,' + bg + ' 94%,' + fg + ')');
+    st.setProperty('--fg', fg);
+    st.setProperty('--muted', 'color-mix(in srgb,' + fg + ' 62%,' + bg + ')');
+    st.setProperty('--line', 'color-mix(in srgb,' + fg + ' 16%,' + bg + ')');
+    st.colorScheme = tpLuma(bg) > 0.5 ? 'light' : 'dark';
   }
 
   function applyTheme() {
@@ -56,6 +73,7 @@
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.setProperty('--accent', accent);
     document.documentElement.style.colorScheme = theme === 'auto' ? 'light dark' : theme;
+    applyCustomColors();
   }
 
   function fixZone() {
