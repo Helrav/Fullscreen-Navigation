@@ -233,7 +233,7 @@
 
   async function loadStorage() {
     try {
-      const r = await api.storage.local.get(['settings', 'pinned', 'dockedPinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId', 'bmFolderIcons', 'railStripV2', 'winPopPinned']);
+      const r = await api.storage.local.get(['settings', 'pinned', 'dockedPinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId', 'bmFolderIcons', 'railStripV2', 'winPopPinned', 'winPopIcons']);
       settings = fnNormalize(r.settings);
       folderIcons = r.bmFolderIcons && typeof r.bmFolderIcons === 'object' ? r.bmFolderIcons : {};
       // The previous rail build could save an expanded thickness (it snapped
@@ -250,6 +250,7 @@
       }
       pinned = !!r.pinned;
       winPopPinned = !!r.winPopPinned;
+      winPopIcons = !!r.winPopIcons;
       // Legacy floating mode always forced pinned=true, so only infer from the
       // live pin when the saved layout is docked and no previous docked state exists.
       dockedPinned = typeof r.dockedPinned === 'boolean'
@@ -1060,8 +1061,11 @@
     }], e.clientX, e.clientY, undefined, true);
   }
 
-  function setWinPopIcons(on) {
+  function setWinPopIcons(on, persist = true) {
     winPopIcons = !!on;
+    if (persist) {
+      try { api.storage.local.set({ winPopIcons }); } catch (_) {}
+    }
     if (!els.winPop) return;
     els.winPop.classList.toggle('icons', winPopIcons);
     if (els.winPopIcons) {
@@ -2931,6 +2935,8 @@
     els.winPopHead.append(els.winPopTitle, els.winPopPin, els.winPopIcons);
     els.winPopBody = h('div', 'winpopbody');
     els.winPop.append(els.winPopHead, els.winPopBody);
+    // Initialize the popover's compact/full-tab state from shared extension storage.
+    setWinPopIcons(winPopIcons, false);
     els.winPop.addEventListener('pointerdown', (e) => e.stopPropagation());
     els.winPop.addEventListener('mouseenter', () => {
       hoverWinPop = true;
@@ -3580,6 +3586,10 @@
       if (ch.winPopPinned) {
         const v = !!ch.winPopPinned.newValue;
         if (v !== winPopPinned) setWinPopPinned(v, false);
+      }
+      if (ch.winPopIcons) {
+        const v = !!ch.winPopIcons.newValue;
+        if (v !== winPopIcons) setWinPopIcons(v, false);
       }
       if (ch.toolbarOrder && Array.isArray(ch.toolbarOrder.newValue)) {
         const valid = ch.toolbarOrder.newValue.filter((id) => DEFAULT_TOOLBAR_ORDER.includes(id));

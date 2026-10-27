@@ -1,7 +1,7 @@
 Fix shared popover collapse and left-side bookmark-bar push
 
-Scope:
-- Persist the Other windows popover's icons-only/full-tab display state through shared extension storage so new tabs/windows inherit it and open ones synchronize.
-- Make the left-aligned popover push the bookmark bar from the left by subtracting the left offset from the available bar width, rather than applying a right-side inset at the same time.
+- Persisted the Other windows popover display state (icons-only/collapsed versus full tabs) as winPopIcons in shared extension storage. Newly opened tabs/windows load this state, and already-open tabs/windows synchronize changes via storage.onChanged.
+- Corrected horizontal bookmark-bar geometry: when the popover is left-aligned, the bar and its items now start after the popover and use the remaining width. When it is right-aligned, the bar keeps its left edge and yields width at the right. This avoids applying a right-side inset to the left-aligned case.
+- Kept the separate per-window section collapse keys intact; they are not used as a substitute for the popover-wide collapsed/expanded state.
 
-Validation: source updates are next; no browser UI test has been run.
+Validation: content.js and fn-bookmarks.js pass JavaScript syntax parsing. Source checks confirm persistence on load/change and side-aware bookmark-bar offset/width calculations. No live Chrome/browser UI test was run.

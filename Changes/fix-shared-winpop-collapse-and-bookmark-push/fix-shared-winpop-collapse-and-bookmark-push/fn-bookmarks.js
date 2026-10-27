@@ -815,9 +815,9 @@
       el.dataset.pos = pos;
       el.dataset.mode = (pos === 'below' || pos === 'above') ? 'bar' : s.bookmarksMode;
       st.right = 'auto';
-      // A horizontal rail's window popover takes width from the bar's right
-      // end; the bar keeps its place above/below the rail and simply yields
-      // room sideways, letting the normal overflow logic fill its >> menu.
+      // The Other windows popover consumes space from the same side it occupies:
+      // right-aligned popovers reduce the bar's right edge; left-aligned popovers
+      // shift the bar and its contents right, reducing the bar's left-side width.
       const barInset = (!previewing && env.barInset) ? env.barInset() : 0;
       const barOffset = (!previewing && env.barOffset) ? env.barOffset() : 0;
       if (pos === 'right' || pos === 'left') {
@@ -828,10 +828,11 @@
         st.left = ((pos === 'right' ? r.right : r.left) / u) + 'px';
         st.transform = pos === 'right' ? '' : 'translateX(-100%)';
       } else {
-        const barWidth = (pos === 'below' || pos === 'above')
-          ? Math.max(1, (r.width / u) - barInset)
-          : (r.width / u);
-        st.left = horizontalEdge ? (barOffset + 'px') : (r.left / u) + 'px';
+        const horizontalBar = pos === 'below' || pos === 'above';
+        const leftPush = horizontalBar ? barOffset : 0;
+        const rightPush = horizontalBar && leftPush <= 0 ? barInset : 0;
+        const barWidth = Math.max(1, (r.width / u) - leftPush - rightPush);
+        st.left = horizontalBar ? ((r.left / u) + leftPush) + 'px' : (r.left / u) + 'px';
         st.width = barWidth + 'px';
         st.height = 'auto';
         st.top = ((pos === 'below' ? r.bottom : r.top) / u) + 'px';
