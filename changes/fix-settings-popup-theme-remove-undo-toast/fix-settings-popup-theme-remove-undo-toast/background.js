@@ -540,42 +540,6 @@ async function moveTabs(ids, target) {
   return { ok: true };
 }
 
-async function undoClose(count, since) {
-  if (!api.sessions || !api.sessions.getRecentlyClosed || !api.sessions.restore) {
-    return { ok: false, restored: 0, reason: 'unsupported' };
-  }
-  const want = Math.max(1, Math.min(100, Number(count) | 0));
-  const cutoff = Number(since) || 0; // caller timestamp is always milliseconds
-  const seen = new Set();
-  let restored = 0, passes = 0;
-  while (restored < want && passes++ < 5) {
-    const items = await api.sessions.getRecentlyClosed({ maxResults: 25 });
-    // Chromium reports lastModified in seconds; Firefox reports milliseconds.
-    // Normalize both to ms before comparing to the toast's cutoff timestamp.
-    const available = items.filter((session) => {
-      const raw = Number(session.lastModified || 0);
-      const modifiedMs = raw > 0 && raw < 100000000000 ? raw * 1000 : raw;
-      const id = session.tab && session.tab.sessionId;
-      return !!id && !seen.has(id) && (!cutoff || modifiedMs >= cutoff);
-    });
-    if (!available.length) break;
-    let progressed = false;
-    for (const session of available) {
-      if (restored >= want) break;
-      const id = session.tab && session.tab.sessionId;
-      if (!id) continue;
-      seen.add(id);
-      try {
-        await api.sessions.restore(id);
-        restored++;
-        progressed = true;
-      } catch (_) {}
-    }
-    if (!progressed) break;
-  }
-  return { ok: true, restored };
-}
-
 async function handle(message, sender) {
   const senderTab = sender && sender.tab;
   const windowId = senderTab && senderTab.windowId;
@@ -618,12 +582,9 @@ async function handle(message, sender) {
       return { ok: true };
     }
     case 'close': {
-      const since = Date.now() - 1500;
       if (ids.length) await api.tabs.remove(ids);
-      return { ok: true, since, count: ids.length };
+      return { ok: true, count: ids.length };
     }
-    case 'undo':
-      return undoClose(message.count || message.n, message.since || 0);
     case 'newTab': {
       const targetWindowId = Number.isInteger(message.windowId) ? message.windowId : windowId;
       await api.tabs.create({ ...(Number.isInteger(targetWindowId) ? { windowId: targetWindowId } : {}) });
