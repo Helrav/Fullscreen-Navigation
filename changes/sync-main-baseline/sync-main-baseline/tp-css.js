@@ -101,7 +101,7 @@ globalThis.TPX.CSS = `
 /* ---------- top part: search + buttons ---------- */
 .top{display:flex;flex-direction:column;flex:none}
 .panel[data-dir=h] .top{flex-direction:row;align-items:center;border-right:1px solid var(--line)}
-.head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px}
+.head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;background:var(--head,transparent)}
 .panel[data-dir=v] .head{border-bottom:1px solid var(--line)}
 .panel[data-dir=h] .head{flex-wrap:nowrap}
 .head.default-toolbar-placement{padding-right:0}
@@ -225,6 +225,7 @@ globalThis.TPX.CSS = `
 /* Light themes: a thin dark rim keeps white site icons visible; dark themes use none. */
 .fav img{width:16px;height:16px;max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;display:block;background:transparent;image-rendering:auto;filter:var(--fav-edge)}
 .fav svg{width:16px;height:16px;fill:currentColor;color:var(--muted)}
+.fav.emoji{font-size:14px;line-height:1;font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif}
 .fav.letter{border-radius:50%;background:var(--sel);font-size:10px;font-weight:600;color:var(--muted)}
 .title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .badge{flex:none;font-size:11px}
@@ -269,7 +270,7 @@ globalThis.TPX.CSS = `
 .snap{position:fixed;z-index:2;display:none;pointer-events:none;background:color-mix(in srgb,var(--accent) 22%,transparent);outline:2px solid var(--accent);outline-offset:-2px}
 
 /* ---------- context menu ---------- */
-.menu,.submenu{min-width:190px;padding:5px;border-radius:10px;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 12px 32px rgba(0,0,0,.32);user-select:none;pointer-events:auto;touch-action:manipulation}
+.menu,.submenu{min-width:190px;padding:5px;border-radius:10px;background:var(--bg2,var(--bg));color:var(--fg);box-shadow:0 0 0 1px var(--line),0 12px 32px rgba(0,0,0,.32);user-select:none;pointer-events:auto;touch-action:manipulation}
 .menu{position:fixed;zoom:var(--u,1);z-index:2147483000}
 .submenu{display:none;position:absolute;top:-6px;left:calc(100% - 4px);z-index:2147483001}
 .submenu.flip{left:auto;right:calc(100% - 4px)}
@@ -296,7 +297,7 @@ globalThis.TPX.CSS = `
 
 /* ---------- settings card + rename prompt ---------- */
 .backdrop{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.32);pointer-events:auto;touch-action:none;overscroll-behavior:contain}
-.card,.prompt{position:fixed;zoom:var(--u,1);z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:14px;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 24px 64px rgba(0,0,0,.45);overflow:hidden;pointer-events:auto}
+.card,.prompt{position:fixed;zoom:var(--u,1);z-index:41;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:14px;background:var(--bg2,var(--bg));color:var(--fg);box-shadow:0 0 0 1px var(--line),0 24px 64px rgba(0,0,0,.45);overflow:hidden;pointer-events:auto}
 .card{display:flex;flex-direction:column;width:min(460px,calc(100vw / var(--u,1) - 24px));height:min(680px,calc(100vh / var(--u,1) - 24px))}
 .cardhead{flex:none;display:flex;align-items:center;justify-content:space-between;padding:8px 8px 8px 16px;border-bottom:1px solid var(--line);font-weight:600}
 .cardframe{flex:1;min-height:0;width:100%;border:0;background:var(--bg)}
@@ -306,6 +307,32 @@ globalThis.TPX.CSS = `
 .bookmark-field .search{height:32px;position:static;color:var(--fg);font-size:13px}
 .ptitle{font-weight:600}
 .pfield{height:30px;position:relative}
+.fip{width:300px;max-height:calc(100vh / var(--u,1) - 16px);overflow:auto}
+.fip-label{margin-top:2px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.fip-row{display:flex;flex-wrap:wrap;gap:6px}
+.fip-sw{width:22px;height:22px;padding:0;border-radius:50%;border:2px solid transparent;cursor:pointer;box-shadow:inset 0 0 0 1px var(--line)}
+.fip-def{background:var(--hover)}
+.fip-sw.on,.fip-gl.on{border-color:var(--accent)}
+.fip-gl{width:32px;height:30px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--muted);cursor:pointer}
+.fip-gl svg{width:16px;height:16px;fill:currentColor}
+.fip-gl:hover{background:var(--hover)}
+.fip-gl.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
+/* While a dialog is open, any folder popup under it is a non-interactive backdrop. */
+.ui:has(.prompt) .menu{pointer-events:none!important;z-index:39!important}
+.bmpick{width:340px}
+.bp-check{display:flex;align-items:center;gap:8px;font-size:12px}
+.bp-list{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px}
+.bp-row{display:flex;align-items:center;gap:6px;height:26px;padding:0 6px;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden}
+.bp-row:hover{background:var(--hover)}
+.bp-row.on{background:color-mix(in srgb,var(--accent) 22%,transparent)}
+.bp-chev{flex:none;width:16px;height:16px;display:grid;place-items:center;color:var(--muted);cursor:pointer}
+.bp-chev svg{width:16px;height:16px;fill:currentColor;transition:transform .12s}
+.bp-chev.open svg{transform:rotate(90deg)}
+.bp-ico{flex:none;width:16px;height:16px;display:grid;place-items:center;color:var(--muted)}
+.bp-ico svg{width:16px;height:16px;fill:currentColor}
+.bp-name{overflow:hidden;text-overflow:ellipsis}
+.bp-new{display:flex}
+.bp-new .search{height:28px}
 .prow{display:flex;justify-content:flex-end;gap:8px}
 .prow .ok{background:var(--accent);border-color:var(--accent);color:#fff}
 
@@ -320,7 +347,7 @@ globalThis.TPX.CSS = `
 .bm[data-pos^=floating-]{align-items:stretch}
 .bm.open .bmc{box-shadow:none;border:1px solid var(--line)}
 .bm:not(.open) .bmc{display:none}
-.bmc{pointer-events:auto;display:flex;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 6px 20px rgba(0,0,0,.22);overflow:hidden}
+.bmc{pointer-events:auto;display:flex;background:var(--bg2,var(--bg));color:var(--fg);box-shadow:0 0 0 1px var(--line),0 6px 20px rgba(0,0,0,.22);overflow:hidden}
 .bm[data-mode=strip] .bmc{flex-direction:column;width:44px;align-self:stretch}
 .bm[data-mode=card] .bmc{flex-direction:column;width:250px;max-height:min(440px,100%);align-self:flex-start;margin:0;border-radius:0;box-shadow:none;border:1px solid var(--line)}
 /* Names mode is attached at the overlay corner: square on the joined edge, subtly rounded on the outer edge. */

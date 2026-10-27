@@ -52,14 +52,14 @@
       <input type="checkbox" data-key="showNames"></label>
     <label class="row"><span class="name">Theme</span>
       <select data-key="theme"><option value="auto">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-    <label class="row"><span class="name">Accent color</span><input type="color" data-key="accent"></label>
-    <label class="row"><span class="name">Custom colors<small>Use your own background and text colors instead of the theme's.</small></span><input type="checkbox" data-key="customColors"></label>
-    <label class="row" data-custom-colors><span class="name">Background color</span><input type="color" data-key="customBg"></label>
-    <label class="row" data-custom-colors><span class="name">Text color</span><input type="color" data-key="customFg"></label>
+    <label class="row" data-theme-off><span class="name">Accent color</span><input type="color" data-key="accent"></label>
+    <label class="row"><span class="name">Theme color<small>Tints the panel, menus and settings with shades of one color: deeper toolbar, lighter menus, matching highlights. Follows Light / Dark above.</small></span><input type="checkbox" data-key="themeTint"></label>
+    <label class="row" data-theme-tint><span class="name">Color</span><input type="color" data-key="themeColor"></label>
     <label class="row"><span class="name">Search box</span><input type="checkbox" data-key="showSearch"></label>
     <label class="row"><span class="name">Search opens in</span><select data-key="searchIn"><option value="newtab">New tab</option><option value="current">Current tab</option></select></label>
     <label class="row"><span class="name">Show bookmark panel<small>Uses your browser bookmarks; opens beside the overlay.</small></span><input type="checkbox" data-key="bookmarks"></label>
     <label class="row" data-bookmarks-mode><span class="name">Vertical bookmarks display</span><select data-key="bookmarksMode"><option value="card">Card with names</option><option value="strip">Icons only</option></select></label>
+    <label class="row" data-bookmarks-on><span class="name">Custom folder icons only in vertical list<small>Right-click a bookmark folder, then Folder icon, to pick a color, symbol or emoji. Turn this on to show them only while bookmarks are vertical.</small></span><input type="checkbox" data-key="folderIconsVerticalOnly"></label>
     <div class="row"><span class="name">Panel size and position<small>Clears any size or position set by dragging the overlay.</small></span>
       <button id="resetSize" type="button" class="btn-plain">Reset size</button></div>
   </section>

@@ -18,15 +18,16 @@
   let data = { cur: -1, windows: [], groups: {} };
   let flat = [];
   let collapsed = {};
+  let folderIcons = {};        // bookmark folder id -> { color, glyph, emoji }
   const selected = new Set();
   let filter = '', selId = null, anchorId = null, needCenter = false, scrollSel = false;
   let port = null, dead = false, hoverPanel = false, lastInZone = false, needRearm = false;
   let resizing = false;
-  let openTimer = 0, closeTimer = 0, resizeTimer = 0, toastTimer = 0, tipTimer = 0;
+  let openTimer = 0, closeTimer = 0, resizeTimer = 0, tipTimer = 0;
   let mods = { ctrl: false, alt: false, shift: false, meta: false };
   let hostEl = null, root = null, ui = null, els = {};
   let contextMenu = null, bookmarks = null, dragIds = null, dragTarget = null;
-  let dockDrag = null, hotZoneEditMode = false, tipEl = null, toastSince = 0, toastCount = 0;
+  let dockDrag = null, hotZoneEditMode = false, tipEl = null;
   let searchPopupOpen = false;
   let keepPeekOpenAfterEscape = false;
   let lastPointer = { x: -1, y: -1 };
@@ -106,15 +107,23 @@
     toolbarOrder = order;
     if (!buttons[edgeToolId]) edgeToolId = 'settings';
 
-    // The edge slot is always active, including after customising the toolbar.
-    // The chosen icon occupies the real overlay edge; all others stay in the
-    // header in the user's stored order.
+    // Docked vertical overlays keep the chosen edge button in its edge slot.
+    // Windowed and horizontal layouts place it inline after the other two toolbar
+    // buttons, so it stays on the top bar rather than floating at the bottom/right.
     if (els.edgeTools) els.edgeTools.replaceChildren();
     const visibleOrder = order.filter((id) => id !== edgeToolId);
+    const inlineEdgeTool = isBox() || !isVertical();
     els.head.append(els.searchRow, ...visibleOrder.map((id) => buttons[id]));
-    if (els.edgeTools && buttons[edgeToolId]) els.edgeTools.appendChild(buttons[edgeToolId]);
+    if (inlineEdgeTool) {
+      if (buttons[edgeToolId]) els.head.appendChild(buttons[edgeToolId]);
+    } else if (els.edgeTools && buttons[edgeToolId]) {
+      els.edgeTools.appendChild(buttons[edgeToolId]);
+    }
     els.head.classList.add('default-toolbar-placement');
-    if (els.panel) els.panel.classList.add('default-toolbar-placement');
+    if (els.panel) {
+      els.panel.classList.add('default-toolbar-placement');
+      els.panel.classList.toggle('inline-edge-tools', inlineEdgeTool);
+    }
     if (persist) {
       try { api.storage.local.set({ toolbarOrder, edgeToolId }); } catch (_) {}
     }
@@ -219,8 +228,9 @@
 
   async function loadStorage() {
     try {
-      const r = await api.storage.local.get(['settings', 'pinned', 'dockedPinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId']);
+      const r = await api.storage.local.get(['settings', 'pinned', 'dockedPinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId', 'bmFolderIcons']);
       settings = tpNormalize(r.settings);
+      folderIcons = r.bmFolderIcons && typeof r.bmFolderIcons === 'object' ? r.bmFolderIcons : {};
       pinned = !!r.pinned;
       // Legacy floating mode always forced pinned=true, so only infer from the
       // live pin when the saved layout is docked and no previous docked state exists.
@@ -257,6 +267,30 @@
     const r = await send({ type: 'env' });
     if (r) return { fs: !!r.fullscreen, zoom: r.zoom > 0 ? r.zoom : 1 };
     return { fs: false, zoom: 1 };
+  }
+
+  function resync() {
+    if (dead) return;
+    refreshEnv();
+    if (shown) {
+      if (!port) connect();
+      refreshTabs();
+    }
+    measure();
+    applyGeometry();
+    syncPush(false);
+    kickHover();
+  }
+
+  // A window that just regained focus does not recompute :hover until the mouse
+  // moves. Chrome re-evaluates hover after a layout change, so nudge one.
+  function kickHover() {
+    if (!els.panel) return;
+    const p = els.panel;
+    const nudge = (v) => { p.style.paddingBottom = v; };
+    const prev = p.style.paddingBottom;
+    nudge('0.01px');
+    requestAnimationFrame(() => requestAnimationFrame(() => nudge(prev)));
   }
 
   async function refreshEnv() {
@@ -760,7 +794,7 @@
       const list = filtering ? w.tabs.filter(matches) : w.tabs;
       if (filtering && !list.length) return;
       const isCur = w.id === data.cur;
-      const wClosed = !filtering && !!collapsed['w' + w.id];
+      const wClosed = !filtering && !!collapsed[collapseKey('w' + w.id)];
 
       // A deliberately short divider separates each visible window section.
       // It is a real flex item so it also works when horizontal layouts flatten
@@ -790,7 +824,7 @@
           if (g) {
             let j = i;
             while (j < list.length && list[j].groupId === t.groupId) j++;
-            const gClosed = !filtering && !!collapsed['g' + t.groupId];
+            const gClosed = !filtering && !!collapsed[collapseKey('g' + t.groupId)];
             const color = GROUP_COLORS[g.color] || GROUP_COLORS.grey;
             const gh = h('div', 'ghead' + (gClosed ? ' closed' : ''));
             gh.dataset.group = String(t.groupId);
@@ -889,7 +923,14 @@
     render();
   }
 
+  // With "collapse windows separately" on, each browser window's overlay keeps
+  // its own collapsed state: the key is namespaced by the window being viewed.
+  function collapseKey(key) {
+    return settings.perWindowCollapse && data.cur >= 0 ? 'v' + data.cur + ':' + key : key;
+  }
+
   function toggleCollapse(key) {
+    key = collapseKey(key);
     if (collapsed[key]) delete collapsed[key]; else collapsed[key] = 1;
     render();
     saveCollapsed();
@@ -1032,6 +1073,7 @@
     items.push(
       { label: 'Add tab' + s + ' to new group', action: () => send({ type: 'group', tabIds: ids }) },
       { label: 'Move tab' + s + ' to new window', action: () => send({ type: 'tabop', op: 'newWindow', tabIds: ids }) },
+      { label: 'Bookmark tab' + s + '…', disabled: !urls.length, action: () => pickBookmarkFolder(ids, x, y) },
       { sep: true },
       { label: 'Copy URL', disabled: !urls.length, action: () => copyText(urls.join('\n')) },
       { label: 'Reload', action: () => send({ type: 'tabop', op: 'reload', tabIds: ids }) },
@@ -1073,13 +1115,21 @@
     };
   }
 
+  function toggleBookmarkPanel() {
+    settings.bookmarks = !settings.bookmarks;
+    saveSettings();
+    update();
+  }
+
   async function showOverlayMenu(windowId, x, y) {
     if (!contextMenu) return;
     const reopen = await getReopenMenuItem();
     contextMenu.showContext([
       { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
+      { label: 'New window', shortcut: 'Ctrl+N', action: () => send({ type: 'newWindow' }) },
       reopen,
       { sep: true },
+      { label: settings.bookmarks ? 'Hide bookmark bar' : 'Show bookmark bar', action: toggleBookmarkPanel },
       { label: 'Settings', action: () => openSettingsCard() }
     ], x, y);
   }
@@ -1091,10 +1141,10 @@
     contextMenu.showContext([
       { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
       reopen,
-      { label: 'Bookmark all tabs…', shortcut: 'Ctrl+Shift+D', disabled: !win.tabs.length, action: () => send({ type: 'tabop', op: 'bookmark', tabIds: win.tabs.map((tab) => tab.id) }) },
+      { label: 'Bookmark all tabs…', shortcut: 'Ctrl+Shift+D', disabled: !win.tabs.length, action: () => pickBookmarkFolder(win.tabs.map((tab) => tab.id)) },
       { sep: true },
       { label: 'Name window…', action: () => promptText('Name window', win.name || '', (name) => send({ type: 'renameWindow', windowId, name })) },
-      { label: collapsed['w' + windowId] ? 'Expand' : 'Collapse', action: () => toggleCollapse('w' + windowId) },
+      { label: collapsed[collapseKey('w' + windowId)] ? 'Expand' : 'Collapse', action: () => toggleCollapse('w' + windowId) },
       { sep: true },
       { label: 'Close', shortcut: 'Alt+F4', danger: true, action: () => send({ type: 'closeWindow', windowId }) }
     ], x, y);
@@ -1103,65 +1153,9 @@
   async function closeTabs(ids) {
     const ordered = orderedIds(ids);
     if (!ordered.length) return;
-    const result = await send({ type: 'close', tabIds: ordered });
+    await send({ type: 'close', tabIds: ordered });
     selected.clear();
-    if (result && result.ok) {
-      if (toastCount && Date.now() < toastExpiry) toastSince = Math.min(toastSince, result.since || Date.now());
-      else { toastCount = 0; toastSince = result.since || Date.now(); }
-      toastCount += Number(result.count || ordered.length);
-      showToast();
-    }
     render();
-  }
-
-  let toastExpiry = 0;
-  function showToast() {
-    if (!els.toast) return;
-    els.toastText.textContent = toastCount + ' tab' + (toastCount === 1 ? '' : 's') + ' closed';
-    els.toast.classList.add('on');
-    const rect = els.panel?.getBoundingClientRect();
-    if (rect && shown) {
-      let x = 12, y = 12;
-      if (settings.edge === 'left') { x = rect.right + 12; y = Math.max(12, rect.bottom - 50); }
-      else if (settings.edge === 'right') { x = Math.max(12, rect.left - 12 - 250); y = Math.max(12, rect.bottom - 50); }
-      else if (settings.edge === 'top') { x = Math.max(12, rect.right - 280); y = rect.bottom + 12; }
-      else { x = Math.max(12, rect.right - 280); y = Math.max(12, rect.top - 48); }
-      els.toast.style.left = (x / u) + 'px';
-      els.toast.style.top = (y / u) + 'px';
-    } else {
-      els.toast.style.left = '12px';
-      els.toast.style.bottom = '12px';
-      els.toast.style.top = 'auto';
-    }
-    clearTimeout(toastTimer);
-    toastExpiry = Date.now() + settings.undoSeconds * 1000;
-    toastTimer = setTimeout(hideToast, settings.undoSeconds * 1000);
-  }
-
-  function hideToast() {
-    clearTimeout(toastTimer);
-    toastTimer = 0;
-    toastCount = 0;
-    toastSince = 0;
-    toastExpiry = 0;
-    if (els.toast) els.toast.classList.remove('on');
-  }
-
-  async function undoClosedTabs() {
-    if (!toastCount) return;
-    const n = toastCount, since = toastSince;
-    hideToast();
-    const result = await send({ type: 'undo', count: n, since });
-    if (result && result.restored < n) {
-      // Keep feedback truthful if the browser no longer has all sessions.
-      els.toastText.textContent = result.restored === 0
-        ? 'No recently closed tabs are available'
-        : 'Restored ' + result.restored + ' of ' + n + ' tabs';
-      els.toast.classList.add('on');
-      els.toastUndo.style.display = 'none';
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { if (els.toastUndo) els.toastUndo.style.display = ''; hideToast(); }, 2500);
-    }
   }
 
   function hideTip() {
@@ -1304,6 +1298,262 @@
   }
 
 
+  function setFolderIcon(id, patch) {
+    const next = { ...folderIcons };
+    if (patch === null) delete next[id];
+    else {
+      const merged = { ...(next[id] || {}), ...patch };
+      for (const k of Object.keys(merged)) if (merged[k] == null || merged[k] === '') delete merged[k];
+      if (Object.keys(merged).length) next[id] = merged; else delete next[id];
+    }
+    folderIcons = next;
+    try { api.storage.local.set({ bmFolderIcons: next }); } catch (_) {}
+    if (bookmarks) bookmarks.refreshIcons();
+  }
+
+  // Separate popup for choosing a bookmark folder's icon. Changes apply live and
+  // the popup stays open until Done, Escape, or a click outside it.
+  function pickFolderIcon(o) {
+    closePrompt();
+    clearClose();
+    const backdrop = h('div', 'backdrop');
+    backdrop.style.background = 'transparent';
+    const prompt = h('div', 'prompt fip');
+    const heading = h('div', 'ptitle', 'Folder icon' + (o.name ? ': ' + o.name : ''));
+    const cur = () => folderIcons[o.id] || {};
+
+    const colorRow = h('div', 'fip-row');
+    const swatches = [];
+    const defSw = h('button', 'fip-sw fip-def');
+    defSw.type = 'button'; defSw.title = 'Default color';
+    defSw.addEventListener('click', () => { setFolderIcon(o.id, { color: null }); sync(); });
+    colorRow.appendChild(defSw);
+    swatches.push([defSw, null]);
+    for (const [name, hex] of o.colors) {
+      const b = h('button', 'fip-sw');
+      b.type = 'button'; b.title = name; b.style.background = hex;
+      b.addEventListener('click', () => { setFolderIcon(o.id, { color: hex }); sync(); });
+      colorRow.appendChild(b);
+      swatches.push([b, hex]);
+    }
+
+    const glyphRow = h('div', 'fip-row');
+    const glyphBtns = [];
+    const mkGlyph = (key, name, d) => {
+      const b = h('button', 'fip-gl');
+      b.type = 'button'; b.title = name;
+      b.appendChild(o.svgIcon(d));
+      b.addEventListener('click', () => { setFolderIcon(o.id, { glyph: key, emoji: null }); sync(); });
+      glyphRow.appendChild(b);
+      glyphBtns.push([b, key]);
+    };
+    mkGlyph(null, 'Folder', o.shape);
+    for (const [key, [name, d]] of Object.entries(o.glyphs)) mkGlyph(key, name, d);
+
+    const emoji = h('input', 'search pfield');
+    emoji.type = 'text';
+    emoji.placeholder = 'Emoji or a letter';
+    emoji.maxLength = 8;
+    emoji.addEventListener('input', () => {
+      const t = Array.from(emoji.value.trim()).slice(0, 2).join('');
+      setFolderIcon(o.id, t ? { emoji: t, glyph: null } : { emoji: null });
+      sync(true);
+    });
+    emoji.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closePrompt(); }
+    });
+
+    function sync(typing) {
+      const c = cur();
+      swatches.forEach(([b, hex]) => b.classList.toggle('on', (c.color || null) === hex));
+      glyphBtns.forEach(([b, key]) => {
+        b.classList.toggle('on', !c.emoji && (c.glyph || null) === key);
+        b.style.color = c.color || '';
+      });
+      if (!typing && emoji.value !== (c.emoji || '')) emoji.value = c.emoji || '';
+    }
+
+    const row = h('div', 'prow');
+    const reset = textBtn('tbtn', 'Reset');
+    const done = textBtn('tbtn ok', 'Done');
+    reset.addEventListener('click', () => { setFolderIcon(o.id, null); sync(); });
+    done.addEventListener('click', () => closePrompt());
+    row.append(reset, done);
+    prompt.append(heading, h('div', 'fip-label', 'Color'), colorRow, h('div', 'fip-label', 'Symbol'), glyphRow, h('div', 'fip-label', 'Emoji'), emoji, row);
+    ui.append(backdrop, prompt);
+    renamePrompt = { backdrop, prompt, input: emoji };
+    sync();
+
+    // Sit beside the folder that was clicked so the change is visible while picking.
+    const r = o.anchor;
+    if (r) {
+      const width = 300 * u, vwp = window.innerWidth, vhp = window.innerHeight;
+      let left = r.right + 10 * u;
+      if (left + width > vwp - 8) left = Math.max(8, r.left - width - 10 * u);
+      const top = Math.max(8, Math.min(r.top, vhp - 380 * u));
+      prompt.style.transform = 'none';
+      prompt.style.left = (left / u) + 'px';
+      prompt.style.top = (top / u) + 'px';
+    }
+    backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); closePrompt(); });
+    backdrop.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    backdrop.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
+  }
+
+  // Folder chooser for bookmarking tabs (the browser's own dialog is not available
+  // to extensions): pick any bookmark folder, optionally make a new one.
+  async function pickBookmarkFolder(tabIds, x, y) {
+    const found = tabIds.map(getTab).filter(Boolean);
+    if (!found.length) return;
+    const tree = await send({ type: 'bmTree' });
+    if (!tree) return;
+    closePrompt();
+    clearClose();
+    const multiple = found.length > 1;
+    const backdrop = h('div', 'backdrop');
+    const prompt = h('div', 'prompt bmpick');
+    const heading = h('div', 'ptitle', multiple ? 'Bookmark ' + found.length + ' tabs' : 'Bookmark tab');
+    const nameInput = h('input', 'search');
+    nameInput.type = 'text';
+    nameInput.maxLength = 255;
+    let useFolder = null;
+    if (multiple) {
+      nameInput.value = 'Saved tabs ' + new Date().toLocaleDateString();
+      const wrap = h('label', 'bp-check');
+      useFolder = h('input');
+      useFolder.type = 'checkbox';
+      useFolder.checked = true;
+      wrap.append(useFolder, h('span', '', 'Put them in a new folder named:'));
+      useFolder.addEventListener('change', () => { nameInput.disabled = !useFolder.checked; });
+      prompt.append(heading, wrap, nameInput);
+    } else {
+      nameInput.value = found[0].tab.title || found[0].tab.url || '';
+      const lab = h('label', 'bookmark-field', 'Name');
+      lab.appendChild(nameInput);
+      prompt.append(heading, lab);
+    }
+
+    const roots = [{ id: tree.barId, title: 'Bookmarks bar', children: tree.bar || [] }];
+    if (tree.otherId) roots.push({ id: tree.otherId, title: 'Other bookmarks', children: tree.other || [] });
+    let selectedId = null;
+    try { selectedId = (await api.storage.local.get('bmLastFolder')).bmLastFolder || null; } catch (_) {}
+    const folderIds = new Set();
+    const collect = (nodes) => { for (const n of nodes) if (n.children) { folderIds.add(String(n.id)); collect(n.children); } };
+    collect(roots);
+    if (!selectedId || !folderIds.has(String(selectedId))) selectedId = roots[0].id;
+    selectedId = String(selectedId);
+    const expanded = new Set(roots.map((r) => String(r.id)));
+    const parentOf = new Map();
+    const index = (nodes, parent) => { for (const n of nodes) if (n.children) { parentOf.set(String(n.id), parent); index(n.children, String(n.id)); } };
+    roots.forEach((r) => { parentOf.set(String(r.id), null); index(r.children, String(r.id)); });
+    for (let p = parentOf.get(selectedId); p; p = parentOf.get(p)) expanded.add(p);
+
+    const list = h('div', 'bp-list');
+    const FOLDER = 'M10 4H3.5A1.5 1.5 0 0 0 2 5.5v13A1.5 1.5 0 0 0 3.5 20h17a1.5 1.5 0 0 0 1.5-1.5V8a1.5 1.5 0 0 0-1.5-1.5H12z';
+    function drawTree() {
+      list.replaceChildren();
+      const walk = (nodes, depth) => {
+        for (const n of nodes) {
+          if (!n.children) continue;
+          const id = String(n.id);
+          const row = h('div', 'bp-row' + (id === selectedId ? ' on' : ''));
+          row.style.paddingLeft = (6 + depth * 14) + 'px';
+          const kids = n.children.some((c) => c.children);
+          const chev = h('span', 'bp-chev');
+          if (kids) {
+            chev.appendChild(svg(ICON_CHEV));
+            chev.classList.toggle('open', expanded.has(id));
+            chev.addEventListener('click', (e) => {
+              e.stopPropagation();
+              if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
+              drawTree();
+            });
+          }
+          const ico = h('span', 'bp-ico');
+          ico.appendChild(svg(FOLDER));
+          row.append(chev, ico, h('span', 'bp-name', n.title || 'Folder'));
+          row.addEventListener('click', () => { selectedId = id; drawTree(); });
+          row.addEventListener('dblclick', () => { if (kids) { if (expanded.has(id)) expanded.delete(id); else expanded.add(id); drawTree(); } });
+          list.appendChild(row);
+          if (kids && expanded.has(id)) walk(n.children, depth + 1);
+        }
+      };
+      walk(roots, 0);
+      const on = list.querySelector('.bp-row.on');
+      if (on) on.scrollIntoView({ block: 'nearest' });
+    }
+    drawTree();
+
+    // New folder inside the selected one.
+    const newRow = h('div', 'bp-new');
+    const newBtn = textBtn('tbtn', 'New folder');
+    const newInput = h('input', 'search');
+    newInput.type = 'text';
+    newInput.placeholder = 'Folder name, then Enter';
+    newInput.maxLength = 120;
+    newInput.style.display = 'none';
+    newRow.append(newBtn, newInput);
+    newBtn.addEventListener('click', () => {
+      newBtn.style.display = 'none';
+      newInput.style.display = '';
+      newInput.focus();
+    });
+    newInput.addEventListener('keydown', async (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); newInput.value = ''; newInput.style.display = 'none'; newBtn.style.display = ''; return; }
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const name = newInput.value.trim();
+      if (!name) return;
+      const result = await send({ type: 'bookmarkAction', op: 'createFolder', parentId: selectedId, title: name });
+      if (!(result && result.ok && result.id)) return;
+      const fresh = await send({ type: 'bmTree' });
+      if (fresh) {
+        roots[0].children = fresh.bar || [];
+        if (roots[1]) roots[1].children = fresh.other || [];
+        parentOf.clear();
+        roots.forEach((r) => { parentOf.set(String(r.id), null); index(r.children, String(r.id)); });
+      }
+      expanded.add(selectedId);
+      selectedId = String(result.id);
+      newInput.value = '';
+      newInput.style.display = 'none';
+      newBtn.style.display = '';
+      drawTree();
+      if (bookmarks) bookmarks.refresh();
+    });
+
+    const row = h('div', 'prow');
+    const cancel = textBtn('tbtn', 'Cancel');
+    const ok = textBtn('tbtn ok', 'Save');
+    row.append(cancel, ok);
+    prompt.append(h('div', 'fip-label', 'Folder'), list, newRow, row);
+    ui.append(backdrop, prompt);
+    renamePrompt = { backdrop, prompt, input: nameInput };
+
+    const save = async () => {
+      const message = { type: 'tabop', op: 'bookmark', tabIds, parentId: selectedId };
+      if (multiple) { if (useFolder.checked) message.folderName = nameInput.value.trim(); }
+      else message.title = nameInput.value.trim();
+      closePrompt();
+      try { api.storage.local.set({ bmLastFolder: selectedId }); } catch (_) {}
+      await send(message);
+      if (bookmarks) bookmarks.refresh();
+    };
+    cancel.addEventListener('click', () => closePrompt());
+    ok.addEventListener('click', save);
+    nameInput.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); save(); }
+      if (e.key === 'Escape') { e.preventDefault(); closePrompt(); }
+    });
+    backdrop.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); closePrompt(); });
+    backdrop.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    backdrop.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
+    requestAnimationFrame(() => { if (!nameInput.disabled) { nameInput.focus(); nameInput.select(); } });
+  }
+
   function promptBookmarkEditor(title, initialName, initialUrl, withUrl, callback) {
     closePrompt();
     clearClose();
@@ -1445,11 +1695,25 @@
     return isBox() && settings.winRect ? settings.winRect.w : settings.panelWidth;
   }
 
+  function minimumWindowedHeightUnits() {
+    const ph = vh() / u;
+    const screenH = Math.max(1, Number(window.screen && window.screen.height) || vh());
+    const requested = (screenH * 0.35) / u;
+    // Keep the minimum at 35% of screen height, except when the visible
+    // browser viewport physically cannot accommodate that height.
+    return Math.min(Math.max(80, requested), Math.max(80, ph - 12));
+  }
+
   function ensureWindowRect() {
     if (settings.winRect) return settings.winRect;
     const pw = vw() / u, ph = vh() / u;
-    const w = tpClamp(settings.panelWidth || 360, 220, Math.max(220, pw - 24));
-    const h0 = tpClamp(Math.min(520, ph - 40), 160, Math.max(160, ph - 24));
+    // Base the initial window size on the screen dimensions rather than the
+    // current browser viewport; cap it only if the viewport cannot fit it.
+    const screenW = Math.max(1, Number(window.screen && window.screen.width) || vw());
+    const screenH = Math.max(1, Number(window.screen && window.screen.height) || vh());
+    const w = tpClamp((screenW * 0.30) / u, 220, Math.max(220, pw - 24));
+    const minH = minimumWindowedHeightUnits();
+    const h0 = tpClamp((screenH * 0.35) / u, minH, Math.max(minH, ph - 24));
     const x = settings.edge === 'right' ? Math.max(12, pw - w - 12) : settings.edge === 'left' ? 12 : tpClamp((pw - w) / 2, 12, Math.max(12, pw - w - 12));
     const y = settings.edge === 'bottom' ? Math.max(12, ph - h0 - 12) : settings.edge === 'top' ? 12 : tpClamp((ph - h0) / 3, 12, Math.max(12, ph - h0 - 12));
     settings.winRect = { x, y, w, h: h0 };
@@ -1584,7 +1848,8 @@
       const pw = vw() / u, ph = vh() / u;
       const rect = ensureWindowRect();
       const w = tpClamp(rect.w, 52, Math.max(52, pw - 12));
-      const hh = tpClamp(rect.h, 80, Math.max(80, ph - 12));
+      const minH = minimumWindowedHeightUnits();
+      const hh = tpClamp(rect.h, minH, Math.max(minH, ph - 12));
       const x = tpClamp(rect.x, 0, Math.max(0, pw - w));
       const y = tpClamp(rect.y, 0, Math.max(0, ph - hh));
       settings.winRect = { x, y, w, h: hh };
@@ -1714,6 +1979,17 @@
     syncPush(!instant);
   }
 
+  // Optional theme colour: tints the overlay with shades of one colour, with a
+  // deeper header, a lighter raised surface for menus/bookmarks, and tuned text.
+  function applyThemeTint() {
+    if (ui && typeof tpApplyPalette === 'function') tpApplyPalette(ui, settings, 'overlay');
+  }
+  try {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onScheme = () => { if (!dead && settings.themeTint && settings.theme === 'auto') applyThemeTint(); };
+    if (mq.addEventListener) mq.addEventListener('change', onScheme); else if (mq.addListener) mq.addListener(onScheme);
+  } catch (_) {}
+
   function applySettings(instant) {
     if (!els.panel) return;
     const s = settings, p = els.panel;
@@ -1722,8 +1998,12 @@
     p.dataset.style = s.style;
     p.dataset.align = tpAlign(s);
     p.dataset.theme = s.theme;
+    // Reflow the edge button whenever switching between docked, horizontal,
+    // and Windowed layouts (including a drag that changes the overlay style).
+    applyToolbarOrder(false);
     hostEl.style.setProperty('--accent', s.accent);
     if (ui) ui.dataset.theme = s.theme;
+    applyThemeTint();
     els.searchWrap.style.display = s.showSearch ? '' : 'none';
     els.searchRow.classList.toggle('nosearch', !s.showSearch);
     if (!s.showSearch && searchPopupOpen) closeSearchPopup(false);
@@ -1758,7 +2038,7 @@
         }
       } else {
         let { l, t, r, b } = start;
-        const minW = 52 * u, minH = 80 * u, W = vw(), H = vh();
+        const minW = 52 * u, minH = minimumWindowedHeightUnits() * u, W = vw(), H = vh();
         if (handle.includes('e')) r = tpClamp(r + dx, l + minW, W);
         if (handle.includes('w')) l = tpClamp(l + dx, 0, r - minW);
         if (handle.includes('s')) b = tpClamp(b + dy, t + minH, H);
@@ -1795,6 +2075,22 @@
     else startDockDrag(e);
   }
 
+  // Dock only when the pointer itself reaches the outermost 0.5% of the viewport.
+  // Normalize distances by the relevant axis so corners resolve consistently.
+  function snapEdgeAtPointer(x, y) {
+    const width = vw(), height = vh();
+    const candidates = [
+      ['left', Math.max(0, x), width * 0.005],
+      ['right', Math.max(0, width - x), width * 0.005],
+      ['top', Math.max(0, y), height * 0.005],
+      ['bottom', Math.max(0, height - y), height * 0.005]
+    ].map(([edge, distance, limit]) => ({
+      edge,
+      ratio: distance / Math.max(1, limit)
+    })).sort((a, b) => a.ratio - b.ratio);
+    return candidates[0] && candidates[0].ratio <= 1 ? candidates[0].edge : null;
+  }
+
   function startDockDrag(e) {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -1823,13 +2119,7 @@
       return { x: xx, y: yy, w: dragW, h: dragH };
     };
     let current = { ...origin };
-    const edgeAt = (x, y) => {
-      const pad = 36;
-      const near = [
-        ['left', x], ['right', vw() - x], ['top', y], ['bottom', vh() - y]
-      ].sort((a, b) => a[1] - b[1]);
-      return near[0][1] <= pad ? near[0][0] : null;
-    };
+    const edgeAt = snapEdgeAtPointer;
     const showSnap = (edge) => {
       snapEdge = edge;
       if (!els.snap) return;
@@ -1909,16 +2199,7 @@
     const original = { x: rect.left / u, y: rect.top / u, w: rect.width / u, h: rect.height / u };
     let moved = false;
 
-    const snapEdgeAtCurrent = () => {
-      const r = els.panel.getBoundingClientRect();
-      const gaps = [
-        ['left', Math.max(0, r.left)],
-        ['right', Math.max(0, vw() - r.right)],
-        ['top', Math.max(0, r.top)],
-        ['bottom', Math.max(0, vh() - r.bottom)]
-      ].sort((a, b) => a[1] - b[1]);
-      return gaps[0][1] <= Math.max(36, Math.round(36 * u)) ? gaps[0][0] : null;
-    };
+
     const showSnap = (edge) => {
       if (!els.snap) return;
       if (!edge) { els.snap.style.display = 'none'; return; }
@@ -1961,10 +2242,10 @@
       }
       applyGeometry();
       if (bookmarks) bookmarks.update();
-      showSnap(snapEdgeAtCurrent());
+      showSnap(snapEdgeAtPointer(ev.clientX, ev.clientY));
     };
-    const up = () => {
-      const edge = moved ? snapEdgeAtCurrent() : null;
+    const up = (ev) => {
+      const edge = moved ? snapEdgeAtPointer(ev.clientX, ev.clientY) : null;
       cleanup();
       if (!moved) return;
       if (edge) {
@@ -2139,14 +2420,10 @@
     els.snap = h('div', 'snap');
     tipEl = h('div', 'tip');
     tipEl.append(h('div', 't1'), h('div', 't2'));
-    els.toast = h('div', 'toast');
-    els.toastText = h('span', '', 'Tabs closed');
-    els.toastUndo = textBtn('', 'Undo');
-    els.toastUndo.addEventListener('click', undoClosedTabs);
-    els.toast.append(els.toastText, els.toastUndo);
+
     // The shield dims and blocks the page (z-index 2); the panel stays above
     // it (z-index 3), and the editable hot-zone handles stay above both (z-4).
-    ui.append(els.snap, els.editShield, els.hint, els.panel, els.dragPreview, els.resizeBuffer, tipEl, els.toast);
+    ui.append(els.snap, els.editShield, els.hint, els.panel, els.dragPreview, els.resizeBuffer, tipEl);
     root.appendChild(ui);
 
     // Create feature modules after their shared elements exist.
@@ -2180,6 +2457,10 @@
         saveSettings();
       },
       send,
+      folderIcons: () => folderIcons,
+      setFolderIcon,
+      pickFolderIcon,
+      toggleBookmarks: toggleBookmarkPanel,
       setMode: (mode) => { settings.bookmarksMode = mode; saveSettings(); update(true); },
       open: openBookmark,
       tip: showTip,
@@ -2202,11 +2483,7 @@
     });
     hoverable(els.panel);
     els.pin.addEventListener('click', () => setPinned(!pinned));
-    els.bookmarkBtn.addEventListener('click', () => {
-      settings.bookmarks = !settings.bookmarks;
-      saveSettings();
-      update();
-    });
+    els.bookmarkBtn.addEventListener('click', toggleBookmarkPanel);
     els.gear.addEventListener('click', openSettingsCard);
     els.list.addEventListener('click', (e) => {
       const tabNode = e.target.closest && e.target.closest('.tab');
@@ -2390,7 +2667,6 @@
     clearTimeout(openTimer);
     clearTimeout(closeTimer);
     clearTimeout(resizeTimer);
-    clearTimeout(toastTimer);
     clearTimeout(tipTimer);
     if (hostEl) hostEl.remove();
   }
@@ -2436,9 +2712,20 @@
     document.addEventListener('fullscreenchange', () => { refreshEnv(); update(); });
     document.addEventListener('visibilitychange', () => {
       if (dead) return;
-      if (document.visibilityState === 'visible') refreshEnv();
+      if (document.visibilityState === 'visible') { refreshEnv(); resync(); }
       else { peek = false; hoverPanel = false; lastInZone = false; clearOpen(); clearClose(); }
       update(true);
+    });
+    // Returning to this window (for example after Tab Peek briefly opened another
+    // one): refresh everything right away instead of waiting for the next input.
+    window.addEventListener('focus', () => { if (!dead) resync(); });
+
+    // Sent by the background after it hands focus back to this window.
+    api.runtime.onMessage.addListener((m) => {
+      if (!dead && m && m.type === 'tp-refocus') {
+        try { window.focus(); } catch (_) {}
+        resync();
+      }
     });
 
     api.storage.onChanged.addListener((ch, area) => {
@@ -2446,6 +2733,10 @@
       if (ch.settings && !resizing) {
         settings = tpNormalize(ch.settings.newValue);
         applySettings();
+      }
+      if (ch.bmFolderIcons) {
+        folderIcons = ch.bmFolderIcons.newValue && typeof ch.bmFolderIcons.newValue === 'object' ? ch.bmFolderIcons.newValue : {};
+        if (bookmarks) bookmarks.refreshIcons();
       }
       if (ch.collapsed) { collapsed = ch.collapsed.newValue || {}; render(); }
       if (ch.dockedPinned) dockedPinned = !!ch.dockedPinned.newValue;

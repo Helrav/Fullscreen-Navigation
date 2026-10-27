@@ -8,27 +8,59 @@ async function newWindowPrefs() {
 }
 
 // Opens a window for Tab Peek: fullscreen (so the overlay can show in it) and/or
-// without taking focus, as the settings ask. If the browser rejects the
-// combination, fall back step by step, keeping fullscreen ahead of background.
-async function createWindowFor(options, prefs) {
-  const attempts = [];
-  if (prefs.fullscreen && prefs.background) attempts.push({ ...options, state: 'fullscreen', focused: false });
-  if (prefs.fullscreen) attempts.push({ ...options, state: 'fullscreen' });
-  if (prefs.background) attempts.push({ ...options, focused: false });
-  attempts.push({ ...options });
+// without taking focus, as the settings ask.
+// Fullscreen is applied as a separate step AFTER the window exists, the same as
+// pressing F11. Creating a window directly with state "fullscreen" gives Chrome
+// a half-fullscreen window that keeps its bookmark bar and has no exit "X" when
+// you hover the top edge.
+async function createWindowFor(options, prefs, returnWindowId) {
+  let win = null;
   let lastError = null;
+  const attempts = prefs.background
+    ? [{ ...options, focused: false }, { ...options }]
+    : [{ ...options }];
   for (const attempt of attempts) {
-    try {
-      const win = await api.windows.create(attempt);
-      if (win) {
-        if (prefs.fullscreen && win.state !== 'fullscreen' && Number.isInteger(win.id)) {
-          api.windows.update(win.id, { state: 'fullscreen' }).catch(() => {});
-        }
-        return win;
-      }
-    } catch (error) { lastError = error; }
+    try { win = await api.windows.create(attempt); } catch (error) { lastError = error; }
+    if (win) break;
   }
-  throw lastError || new Error('window-create-failed');
+  if (!win) throw lastError || new Error('window-create-failed');
+
+  if (prefs.fullscreen && Number.isInteger(win.id)) {
+    const goFullscreen = async () => {
+      try {
+        await api.windows.update(win.id, { state: 'fullscreen' });
+      } catch (_) {
+        // Some browsers only allow it for a focused window.
+        try { await api.windows.update(win.id, { focused: true, state: 'fullscreen' }); } catch (_) {}
+      }
+    };
+    await goFullscreen();
+    // The window can still be settling; confirm once and retry if it did not take.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const check = await api.windows.get(win.id).catch(() => null);
+    if (check && check.state !== 'fullscreen') await goFullscreen();
+  }
+
+  // The user wanted to stay where they were: hand focus back to that window.
+  if (prefs.background && Number.isInteger(returnWindowId) && returnWindowId !== win.id) {
+    await returnFocusTo(returnWindowId);
+  }
+  return win;
+}
+
+// Giving the window focus back is not always enough: the page inside can stay
+// "unfocused" (no hover, no key input) until it is clicked. So focus the window
+// twice with a gap, re-activate its current tab, and tell the page to wake up.
+async function returnFocusTo(windowId) {
+  const focus = () => api.windows.update(windowId, { focused: true }).catch(() => {});
+  await focus();
+  const [tab] = await api.tabs.query({ windowId, active: true }).catch(() => []);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await focus();
+  if (tab && Number.isInteger(tab.id)) {
+    await api.tabs.update(tab.id, { active: true }).catch(() => {});
+    api.tabs.sendMessage(tab.id, { type: 'tp-refocus' }).catch(() => {});
+  }
 }
 
 // Tab Peek keeps window labels internally because browsers do not expose a
@@ -237,12 +269,12 @@ async function openFolderBookmarks(folderId, operation, senderTab) {
       return { ok: true, count: opened.length };
     }
     case 'openFolderWindow': {
-      const win = await createWindowFor({ url: urls }, await newWindowPrefs());
+      const win = await createWindowFor({ url: urls }, await newWindowPrefs(), sourceWindow);
       if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
       return { ok: true, count: urls.length };
     }
     case 'openFolderIncognito': {
-      const win = await createWindowFor({ url: urls, incognito: true }, await newWindowPrefs());
+      const win = await createWindowFor({ url: urls, incognito: true }, await newWindowPrefs(), sourceWindow);
       if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
       return { ok: true, count: urls.length };
     }
@@ -279,12 +311,12 @@ async function bookmarkAction(message, sender) {
 
       case 'openWindow':
         if (!url) return { ok: false, reason: 'missing-url' };
-        await createWindowFor({ url }, await newWindowPrefs());
+        await createWindowFor({ url }, await newWindowPrefs(), senderTab && senderTab.windowId);
         return { ok: true };
 
       case 'openIncognito':
         if (!url) return { ok: false, reason: 'missing-url' };
-        await createWindowFor({ url, incognito: true }, await newWindowPrefs());
+        await createWindowFor({ url, incognito: true }, await newWindowPrefs(), senderTab && senderTab.windowId);
         return { ok: true };
 
       case 'openFolder':
@@ -341,9 +373,9 @@ async function bookmarkAction(message, sender) {
           if (!url) return { ok: false, reason: 'missing-url' };
           details.url = url;
         }
-        await bm.create(details);
+        const created = await bm.create(details);
         scheduleBookmarks();
-        return { ok: true };
+        return { ok: true, id: created && created.id };
       }
 
       case 'delete':
@@ -412,19 +444,28 @@ async function bookmarkAction(message, sender) {
   }
 }
 
-async function bookmarkTabs(ids) {
+// opts: { parentId, title (single tab), folderName (several tabs: put them in a new folder) }
+async function bookmarkTabs(ids, opts = {}) {
   if (!api.bookmarks || !api.bookmarks.create) return { ok: false, reason: 'unsupported' };
   const tabs = (await Promise.all(ids.map((id) => api.tabs.get(id).catch(() => null)))
     ).filter((tab) => tab && tab.url && !/^(chrome|edge|about|javascript):/i.test(tab.url));
   if (!tabs.length) return { ok: false, reason: 'no-bookmarkable-tabs' };
   const tree = await bookmarksTree();
-  const parentId = tree && tree.barId ? tree.barId : undefined;
+  const parentId = opts.parentId != null ? String(opts.parentId) : (tree && tree.barId ? tree.barId : undefined);
   if (tabs.length === 1) {
-    await api.bookmarks.create({ parentId, title: tabs[0].title || tabs[0].url, url: tabs[0].url });
+    const title = typeof opts.title === 'string' && opts.title.trim() ? opts.title.trim() : (tabs[0].title || tabs[0].url);
+    await api.bookmarks.create({ parentId, title, url: tabs[0].url });
   } else {
-    const folder = await api.bookmarks.create({ parentId, title: 'Saved tabs ' + new Date().toLocaleDateString() });
+    let target = parentId;
+    // With a chosen destination the tabs go straight in, unless a folder name is given.
+    if (opts.parentId == null || (typeof opts.folderName === 'string' && opts.folderName.trim())) {
+      const name = typeof opts.folderName === 'string' && opts.folderName.trim()
+        ? opts.folderName.trim().slice(0, 120)
+        : 'Saved tabs ' + new Date().toLocaleDateString();
+      target = (await api.bookmarks.create({ parentId, title: name })).id;
+    }
     for (const tab of tabs) {
-      await api.bookmarks.create({ parentId: folder.id, title: tab.title || tab.url, url: tab.url });
+      await api.bookmarks.create({ parentId: target, title: tab.title || tab.url, url: tab.url });
     }
   }
   return { ok: true };
@@ -679,13 +720,13 @@ async function handle(message, sender) {
           break;
         }
         case 'newWindow': {
-          const win = await createWindowFor({ tabId: ids[0] }, await newWindowPrefs());
+          const win = await createWindowFor({ tabId: ids[0] }, await newWindowPrefs(), windowId);
           const rest = ids.slice(1);
           if (rest.length && win && Number.isInteger(win.id)) await api.tabs.move(rest, { windowId: win.id, index: -1 });
           break;
         }
         case 'bookmark':
-          return bookmarkTabs(ids);
+          return bookmarkTabs(ids, { parentId: message.parentId, title: message.title, folderName: message.folderName });
         case 'ungroup':
           if (api.tabs.ungroup) await api.tabs.ungroup(ids);
           break;

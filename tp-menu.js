@@ -232,9 +232,55 @@
     function showBeside(items, rect, side) {
       show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side);
     }
+    function showBesideAutoVertical(items, rect, preferredSide, preserveFolderHover = false) {
+      const side = preferredSide === 'above' ? 'above' : 'below';
+      show(items, rect.left, side === 'below' ? rect.bottom : rect.top, side, preserveFolderHover);
+      if (!open || !el) return;
+      const menuRect = el.getBoundingClientRect();
+      const aboveSpace = Math.max(0, rect.top - 4);
+      const belowSpace = Math.max(0, env.vh() - rect.bottom - 4);
+      const preferredSpace = side === 'above' ? aboveSpace : belowSpace;
+      const oppositeSpace = side === 'above' ? belowSpace : aboveSpace;
+      if (menuRect.height > preferredSpace && oppositeSpace > preferredSpace) {
+        const flipped = side === 'above' ? 'below' : 'above';
+        place(el, rect.left, flipped === 'below' ? rect.bottom : rect.top, flipped);
+      }
+    }
     function switchFolderBeside(items, rect, side) {
       show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side, true);
     }
+    // Rebuild the open folder popup in place (same position, same opened
+    // sub-folders and scroll) after its bookmarks changed.
+    function rebuildMain(items) {
+      if (!open || !el) return false;
+      const rowsOf = (box) => Array.from(box.children).filter((c) => c.classList && c.classList.contains('mi'));
+      const path = [];
+      let box = el;
+      for (;;) {
+        const idx = rowsOf(box).findIndex((r) => r.classList.contains('open'));
+        if (idx < 0) break;
+        path.push(idx);
+        const next = rowsOf(box)[idx].querySelector(':scope > .submenu');
+        if (!next) break;
+        box = next;
+      }
+      const top = el.scrollTop;
+      const hover = folderHoverMode;
+      el.replaceChildren();
+      fill(el, items.length ? items : [{ label: '(empty)', disabled: true }], 'main');
+      folderHoverMode = hover;
+      box = el;
+      for (const idx of path) {
+        const row = rowsOf(box)[idx];
+        if (!row) break;
+        row.click();
+        box = row.querySelector(':scope > .submenu');
+        if (!box) break;
+      }
+      el.scrollTop = top;
+      return true;
+    }
+    const isMainOpen = () => !!(open && el);
     function showContextBeside(items, rect, side) {
       showContext(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side);
     }
@@ -248,18 +294,27 @@
     window.addEventListener('mousedown', dismissOutside, true);
     window.addEventListener('pointerdown', dismissOutside, true);
     window.addEventListener('contextmenu', dismissOutside, true);
-    root.addEventListener('mousedown', (e) => {
+    const dismissOverlayMenuOutside = (e) => {
       const target = e.target;
+      // Dialogs opened from a menu (edit bookmark, folder icon...) must not close
+      // the menu they came from: it stays open underneath them.
+      if (target && target.closest && target.closest('.prompt,.backdrop')) return;
       const insideMenu = target && target.closest && target.closest('.menu');
       const folderTrigger = target && target.closest && target.closest('.bm-folder-menu-trigger');
       if (isOpen() && !insideMenu && !folderTrigger) hide();
-    }, true);
+    };
+    root.addEventListener('mousedown', dismissOverlayMenuOutside, true);
+    // The horizontal bookmarks bar can receive clicks in places where its own
+    // handlers prevent the usual mouse sequence from dismissing the popup.
+    // Capture click as a second outside-dismiss path; menu rows and folder
+    // triggers remain exempt, and target handlers still run normally afterward.
+    root.addEventListener('click', dismissOverlayMenuOutside, true);
     // Right-clicking somewhere else inside the overlay closes an open context menu.
     root.addEventListener('contextmenu', (e) => {
       const target = e.target;
       const insideMenu = target && target.closest && target.closest('.menu');
       if (contextOpen && !insideMenu) hideContext();
     }, true);
-    return { show, showBeside, switchFolderBeside, activateFolderHoverMode, isFolderHoverActive, showContext, showContextBeside, hide, closeLatest, isOpen };
+    return { rebuildMain, isMainOpen, show, showBeside, showBesideAutoVertical, switchFolderBeside, activateFolderHoverMode, isFolderHoverActive, showContext, showContextBeside, hide, closeLatest, isOpen };
   };
 })();

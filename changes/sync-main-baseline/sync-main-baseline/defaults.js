@@ -15,10 +15,10 @@ const TP_DEFAULTS = {
   winRect: null,            // {x,y,w,h} for the floating window
   theme: 'auto',
   accent: '#4f8cff',
-  // Optional custom colours; used only while customColors is on.
-  customColors: false,
-  customBg: '#fbfbfa',
-  customFg: '#1c1f23',
+  // Optional theme colour: tints every surface with shades of one colour and
+  // drives the accent. Light/dark follows the Theme setting.
+  themeTint: false,
+  themeColor: '#4f8cff',
   showSearch: true,
   showNames: true,
   // Behavior
@@ -37,6 +37,7 @@ const TP_DEFAULTS = {
   // Bookmarks
   bookmarks: false,
   bookmarksMode: 'card',     // card | strip (left/right overlays)
+  folderIconsVerticalOnly: false, // custom bookmark-folder icons show only in the vertical list
   floatingBookmarksEdge: 'auto', // auto | left | right | top | bottom when floating
   floatingBookmarksDockOffset: 0 // legacy compatibility only; windowed bookmarks no longer offset the overlay
 };
@@ -49,23 +50,94 @@ const tpLuma = (hex) => {
   return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
 };
 
-// CSS variables the overlay overrides while custom colours are on.
-const TP_CUSTOM_VARS = ['--bg', '--fg', '--muted', '--line', '--hover', '--sel', '--fav-edge'];
-function tpCustomVars(s) {
-  if (!s.customColors) return null;
-  const bg = s.customBg, fg = s.customFg;
-  const mix = (pct, base) => 'color-mix(in srgb,' + fg + ' ' + pct + '%,' + base + ')';
+// ---- Theme colour -------------------------------------------------------
+// One colour in, a whole palette out. Surfaces keep the colour's hue at a low
+// saturation and are stepped in lightness so regions read as distinct layers:
+//   head  : the deepest layer (toolbar / page behind cards)
+//   bg    : the main surface (tab list)
+//   bg2   : the raised layer (menus, bookmarks, settings cards)
+function tpHexToHsl(hex) {
+  const n = parseInt(String(hex).slice(1), 16) || 0;
+  const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let hh = 0;
+  if (d) {
+    hh = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    hh *= 60;
+    if (hh < 0) hh += 360;
+  }
+  const l = (max + min) / 2;
+  const sat = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+  return { h: hh, s: sat, l };
+}
+
+function tpIsDark(s) {
+  if (s.theme === 'dark') return true;
+  if (s.theme === 'light') return false;
+  try { return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (_) { return false; }
+}
+
+function tpPalette(s) {
+  if (!s || !s.themeTint) return null;
+  const dark = tpIsDark(s);
+  const c = tpHexToHsl(s.themeColor);
+  const h = Math.round(c.h);
+  const pc = (v) => Math.round(v * 100);
+  const sat = Math.min(c.s * 0.6, 0.4);            // tinted, never garish
+  const hsl = (sa, l, a) => 'hsl(' + h + ' ' + pc(sa) + '% ' + pc(l) + '%' + (a == null ? '' : ' / ' + a) + ')';
+  // The accent keeps the chosen colour but is nudged so it stays readable.
+  const acc = tpHexToHsl(s.themeColor);
+  const accL = dark ? Math.max(acc.l, 0.6) : Math.min(acc.l, 0.48);
+  const accent = 'hsl(' + h + ' ' + pc(Math.max(acc.s, 0.45)) + '% ' + pc(accL) + '%)';
+  if (dark) {
+    return {
+      dark,
+      '--head': hsl(sat, 0.085),
+      '--bg': hsl(sat, 0.125),
+      '--bg2': hsl(sat, 0.175),
+      '--fg': hsl(Math.min(sat, 0.2), 0.93),
+      '--muted': hsl(Math.min(sat, 0.25), 0.7),
+      '--line': hsl(Math.min(sat + 0.1, 0.5), 0.8, 0.14),
+      '--hover': hsl(Math.min(sat + 0.1, 0.5), 0.85, 0.08),
+      '--sel': hsl(Math.min(sat + 0.1, 0.5), 0.85, 0.15),
+      '--accent': accent,
+      '--fav-edge': 'none'
+    };
+  }
   return {
-    '--bg': bg,
-    '--fg': fg,
-    '--muted': mix(62, bg),
-    '--line': mix(16, 'transparent'),
-    '--hover': mix(8, 'transparent'),
-    '--sel': mix(13, 'transparent'),
-    '--fav-edge': tpLuma(bg) > 0.5
-      ? 'drop-shadow(0 0 .5px rgba(20,24,30,.6)) drop-shadow(0 0 1px rgba(20,24,30,.35))'
-      : 'none'
+    dark,
+    '--head': hsl(sat, 0.925),
+    '--bg': hsl(Math.min(sat + 0.1, 0.5), 0.955),
+    '--bg2': hsl(Math.min(sat + 0.1, 0.5), 0.99),
+    '--fg': hsl(Math.min(sat, 0.3), 0.13),
+    '--muted': hsl(Math.min(sat, 0.2), 0.4),
+    '--line': hsl(Math.min(sat + 0.1, 0.5), 0.2, 0.15),
+    '--hover': hsl(Math.min(sat + 0.1, 0.5), 0.25, 0.07),
+    '--sel': hsl(Math.min(sat + 0.1, 0.5), 0.25, 0.12),
+    '--accent': accent,
+    '--fav-edge': 'drop-shadow(0 0 .5px rgba(20,24,30,.6)) drop-shadow(0 0 1px rgba(20,24,30,.35))'
   };
+}
+
+const TP_PALETTE_VARS = ['--head', '--bg', '--bg2', '--fg', '--muted', '--line', '--hover', '--sel', '--accent', '--fav-edge'];
+// Settings page variables for the same palette.
+const TP_PAGE_MAP = { '--bg': '--head', '--card': '--bg2', '--fg': '--fg', '--muted': '--muted', '--line': '--line', '--accent': '--accent' };
+
+// target: 'overlay' (element holding the overlay's variables) or 'page' (settings document).
+function tpApplyPalette(el, s, target) {
+  const st = el.style;
+  const pal = tpPalette(s);
+  if (target === 'page') {
+    for (const k of Object.keys(TP_PAGE_MAP)) st.removeProperty(k);
+    st.removeProperty('--line-soft');
+    if (!pal) { st.colorScheme = s.theme === 'auto' ? 'light dark' : s.theme; return; }
+    for (const [k, from] of Object.entries(TP_PAGE_MAP)) st.setProperty(k, pal[from]);
+    st.colorScheme = pal.dark ? 'dark' : 'light';
+    return;
+  }
+  for (const k of TP_PALETTE_VARS) {
+    if (pal) st.setProperty(k, pal[k]); else st.removeProperty(k);
+  }
 }
 
 function tpNormalize(stored) {
@@ -92,10 +164,16 @@ function tpNormalize(stored) {
   s.panelWidth = tpClamp(Number(s.panelWidth) || 300, 52, 800);
   s.barHeight = tpClamp(Number(s.barHeight) || 56, 40, 400);
   const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : d);
-  s.customColors = !!s.customColors;
-  s.customBg = hex(s.customBg, TP_DEFAULTS.customBg);
-  s.customFg = hex(s.customFg, TP_DEFAULTS.customFg);
+  // Older builds had separate background/text colours; keep the background's hue.
+  if (stored && stored.themeTint === undefined && stored.customColors) {
+    s.themeTint = true;
+    s.themeColor = stored.customBg;
+  }
+  delete s.customColors; delete s.customBg; delete s.customFg;
+  s.themeTint = !!s.themeTint;
+  s.themeColor = hex(s.themeColor, TP_DEFAULTS.themeColor);
   s.perWindowCollapse = !!s.perWindowCollapse;
+  s.folderIconsVerticalOnly = !!s.folderIconsVerticalOnly;
   s.newWindowFullscreen = s.newWindowFullscreen !== false;
   s.openInBackground = s.openInBackground !== false;
   if (!Array.isArray(s.sites)) s.sites = [];

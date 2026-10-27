@@ -67,10 +67,18 @@
       if (pos === 'below' || pos === 'floating-bottom') return 'below';
       return 'right';
     }
+    function isOpenRootFolder(n) {
+      return !!(n && n.children && openFolderMenuId === String(n.id) && env.menu.isOpen());
+    }
+
     function attachBookmarkTooltip(target, n, preferredSide) {
       const tip = bookmarkTooltip(n);
       if (!tip.title || !env.tip) return;
       target.addEventListener('mouseenter', () => {
+        if (isOpenRootFolder(n)) {
+          if (env.hideTip) env.hideTip();
+          return;
+        }
         env.tip(target.getBoundingClientRect(), tip.title, tip.detail, preferredSide || bookmarkTooltipSide());
       });
       target.addEventListener('mouseleave', () => { if (env.hideTip) env.hideTip(); });
@@ -98,6 +106,61 @@
       return btn;
     }
 
+    // ----- custom folder icons -----
+    // Per-folder look, stored by bookmark id: { color?: '#hex', glyph?: key, emoji?: 'text' }.
+    const FOLDER_GLYPHS = {
+      star: ['Star', 'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z'],
+      heart: ['Heart', 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54z'],
+      home: ['Home', 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'],
+      work: ['Work', 'M20 6h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v2H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 0h-4V4h4v2z'],
+      book: ['Reading', 'M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z'],
+      code: ['Code', 'M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6z'],
+      music: ['Music', 'M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'],
+      cart: ['Shopping', 'M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0 0 20 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z'],
+      game: ['Games', 'M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z'],
+      mail: ['Mail', 'M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z'],
+      bolt: ['Bolt', 'M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z']
+    };
+    const FOLDER_COLORS = [
+      ['Grey', '#9aa0a6'], ['Blue', '#4f8cff'], ['Red', '#ea5b52'], ['Yellow', '#f2b631'], ['Green', '#34a853'],
+      ['Pink', '#ee6fb0'], ['Purple', '#a66cf0'], ['Cyan', '#2cc1d6'], ['Orange', '#f28b3d']
+    ];
+    const FOLDER_SHAPE = 'M10 4H3.5A1.5 1.5 0 0 0 2 5.5v13A1.5 1.5 0 0 0 3.5 20h17a1.5 1.5 0 0 0 1.5-1.5V8a1.5 1.5 0 0 0-1.5-1.5H12z';
+    let iconSig = '';
+    const folderSpec = (n) => {
+      const map = env.folderIcons ? env.folderIcons() : null;
+      const spec = map && n && map[String(n.id)];
+      if (!spec) return null;
+      // Optionally keep custom icons to the vertical list; bars and their menus stay default.
+      if (env.settings().folderIconsVerticalOnly && horizontal()) return null;
+      return spec;
+    };
+    const svgIcon = (d, color) => {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('aria-hidden', 'true');
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'currentColor');
+      svg.appendChild(path);
+      if (color) svg.style.color = color;
+      return svg;
+    };
+
+    // One menu entry opens a separate picker popup, so choosing colors or symbols
+    // never closes a menu: the popup stays until you press Done.
+    function folderIconMenu(n, anchor) {
+      const id = String(n.id);
+      return {
+        label: 'Folder icon…',
+        action: () => env.pickFolderIcon && env.pickFolderIcon({
+          id, name: label(n), anchor: anchor || el.getBoundingClientRect(),
+          glyphs: FOLDER_GLYPHS, colors: FOLDER_COLORS, shape: FOLDER_SHAPE, svgIcon
+        })
+      };
+    }
+
     // ----- pieces -----
     function icon(n) {
       const s = h('span', 'fav');
@@ -108,15 +171,14 @@
         if (first) s.classList.add('letter');
       };
       if (!n.url) {
-        const ns = 'http://www.w3.org/2000/svg';
-        const folder = document.createElementNS(ns, 'svg');
-        folder.setAttribute('viewBox', '0 0 24 24');
-        folder.setAttribute('aria-hidden', 'true');
-        const path = document.createElementNS(ns, 'path');
-        path.setAttribute('d', 'M10 4H3.5A1.5 1.5 0 0 0 2 5.5v13A1.5 1.5 0 0 0 3.5 20h17a1.5 1.5 0 0 0 1.5-1.5V8a1.5 1.5 0 0 0-1.5-1.5H12z');
-        path.setAttribute('fill', 'currentColor');
-        folder.appendChild(path);
-        s.appendChild(folder);
+        const spec = folderSpec(n);
+        if (spec && spec.emoji) {
+          s.textContent = spec.emoji;
+          s.classList.add('emoji');
+          return s;
+        }
+        const glyph = spec && FOLDER_GLYPHS[spec.glyph];
+        s.appendChild(svgIcon(glyph ? glyph[1] : FOLDER_SHAPE, spec && spec.color));
         return s;
       }
       if (X.favicons) {
@@ -136,12 +198,12 @@
       env.send({ type: 'bookmarkAction', op: 'openFolder', id: n.id });
     }
 
-    function toItems(nodes) {
+    function toItems(nodes, suppressFolderTooltips = false) {
       if (!nodes.length) return [{ label: '(empty)', disabled: true }];
       return nodes.map((n) => (n.children
         ? {
-            label: label(n), tooltip: bookmarkTooltip(n), icon: () => icon(n),
-            lazySub: () => toItems(n.children), clickSub: true,
+            label: label(n), tooltip: suppressFolderTooltips ? null : bookmarkTooltip(n), icon: () => icon(n),
+            lazySub: () => toItems(n.children, suppressFolderTooltips), clickSub: true,
             modifiedAction: () => openFolderInBackground(n),
             onContext: (e) => showContextMenu(e, n)
           }
@@ -150,6 +212,15 @@
             action: (e) => openBm(n, e), keepOpenOnModified: true,
             onContext: (e) => showContextMenu(e, n)
           }));
+    }
+
+    function showFolderMenuBeside(items, rect, side, preserveFolderHover = false) {
+      if (horizontal() && env.menu.showBesideAutoVertical) {
+        env.menu.showBesideAutoVertical(items, rect, side, preserveFolderHover);
+        return;
+      }
+      if (preserveFolderHover && env.menu.switchFolderBeside) env.menu.switchFolderBeside(items, rect, side);
+      else env.menu.showBeside(items, rect, side);
     }
 
     function toggleFolderMenu(n, button, side) {
@@ -161,7 +232,7 @@
       }
       openFolderMenuId = id;
       env.hideTip();
-      env.menu.showBeside(toItems(n.children), button.getBoundingClientRect(), side);
+      showFolderMenuBeside(toItems(n.children, true), button.getBoundingClientRect(), side);
       // Clicking a root folder is the first intentional step into folder
       // navigation. From this point on, hovering another root folder switches
       // immediately, just like hovering another sibling inside the menu.
@@ -175,14 +246,18 @@
       openFolderMenuId = id;
       env.hideTip();
       const rect = button.getBoundingClientRect();
-      if (env.menu.switchFolderBeside) env.menu.switchFolderBeside(toItems(n.children), rect, side);
-      else env.menu.showBeside(toItems(n.children), rect, side);
+      showFolderMenuBeside(toItems(n.children, true), rect, side, true);
     }
 
 
     async function showContextMenu(e, n) {
       e.preventDefault();
       e.stopPropagation();
+      // Remember which row was clicked (before any await) so popups can sit beside it.
+      const rowEl = e.target && e.target.closest && e.target.closest('.mi,.bmr,.bmicon,.bmitem');
+      const rr = rowEl ? rowEl.getBoundingClientRect() : null;
+      const anchor = rr && rr.width ? rr
+        : { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY, width: 1, height: 1 };
       const targetParentId = n && n.children
         ? n.id
         : (n && n.parentId != null ? n.parentId : (data && data.barId));
@@ -236,6 +311,7 @@
         ...openItems,
         { sep: true },
         edit,
+        ...(isFolder && n.id != null && env.setFolderIcon ? [folderIconMenu(n, anchor)] : []),
         { sep: true },
         action('Cut', 'clipboardSet', { id: targetId, cut: true }, !!targetId),
         action('Copy', 'clipboardSet', { id: targetId, cut: false }, !!targetId),
@@ -247,7 +323,7 @@
         addFolder,
         { sep: true },
         { label: 'Open bookmarks manager', action: run('openManager') },
-        { label: 'Show bookmark bar', action: run('showBarSettings') }
+        { label: env.settings().bookmarks ? 'Hide bookmark bar' : 'Show bookmark bar', action: () => env.toggleBookmarks && env.toggleBookmarks() }
       ];
       if (env.menu.showContext) env.menu.showContext(items, e.clientX, e.clientY);
       else env.menu.show(items, e.clientX, e.clientY);
@@ -282,7 +358,7 @@
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.classList.add('bm-folder-menu-trigger');
-          const side = (el.dataset.pos === 'above' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
+          const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
           b.addEventListener('mouseenter', () => hoverSwitchFolderMenu(n, b, side));
           b.addEventListener('click', (e) => {
             if (e.ctrlKey || e.metaKey) { e.preventDefault(); openFolderInBackground(n); return; }
@@ -318,7 +394,10 @@
         items.forEach((b, i) => { if (cut < 0 && b.offsetLeft + b.offsetWidth > w + 0.5) cut = i; });
         if (cut < 0) { more.style.display = 'none'; return; }
         for (let i = cut; i < items.length; i++) items[i].style.display = 'none';
-        more.onclick = () => env.menu.showBeside(toItems(data.bar.slice(cut)), more.getBoundingClientRect(), (el.dataset.pos === 'above' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below');
+        more.onclick = () => {
+          const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
+          showFolderMenuBeside(toItems(data.bar.slice(cut)), more.getBoundingClientRect(), side);
+        };
       };
       fitSoon();
     }
@@ -350,6 +429,10 @@
         b.appendChild(icon(n));
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('mouseenter', () => {
+          if (isOpenRootFolder(n)) {
+            env.hideTip();
+            return;
+          }
           const title = label(n);
           const hoverText = title || n.url || '';
           if (hoverText) env.tip(b.getBoundingClientRect(), hoverText, title ? (n.url || '') : '', side);
@@ -731,6 +814,22 @@
       if (!previewing && env.setFloatingSide) env.setFloatingSide(s.bookmarks ? dockedEdge : null);
     }
 
+    // A folder popup that is open while its contents change (a page added, edited
+    // or deleted, an icon changed) is rebuilt in place instead of showing stale rows.
+    function findNode(nodes, id) {
+      for (const node of nodes) {
+        if (String(node.id) === String(id)) return node;
+        if (node.children) { const hit = findNode(node.children, id); if (hit) return hit; }
+      }
+      return null;
+    }
+    function rebuildOpenFolderMenu() {
+      if (!data || openFolderMenuId === null || !env.menu.isMainOpen || !env.menu.isMainOpen()) return;
+      const node = findNode(allTop(), openFolderMenuId);
+      if (!node || !node.children) return;
+      env.menu.rebuildMain(toItems(node.children, true));
+    }
+
     let treeSig = '', reloadQueued = false;
     async function load() {
       if (loading) { reloadQueued = true; return; }
@@ -749,6 +848,7 @@
       // old data meanwhile avoids the "Loading..." flash on every refresh.
       if (changed) lastKey = '';
       update();
+      if (changed) rebuildOpenFolderMenu();
       if (reloadQueued) { reloadQueued = false; load(); }
     }
 
@@ -759,7 +859,7 @@
       if (!vis) return;
       place();
       if (s.bookmarks && !data && !loading && !failed) load();
-      const key = [el.dataset.pos, el.dataset.mode, s.bookmarksMode, s.bookmarks, !!data].join('|');
+      const key = [el.dataset.pos, el.dataset.mode, s.bookmarksMode, s.bookmarks, !!data, iconSig, !!s.folderIconsVerticalOnly].join('|');
       if (key !== lastKey) { lastKey = key; renderContent(); }
       else if (horizontal() && s.bookmarks) fitSoon();
     }
@@ -770,8 +870,10 @@
       if (!env.shown() || !s.bookmarks || (env.floating && env.floating())) return 0;
       if (activeDockedBookmarkEdge()) return 0;
       if (el.dataset.pos === 'below' || el.dataset.pos === 'above') return BAR_H;
-      // The drawer starts directly at the overlay edge; no chevron tab is present.
-      return s.bookmarksMode === 'strip' ? STRIP_W : 250;
+      // The icon strip reserves page space. The expanded names card does not:
+      // it floats over the page, which stays where the strip left it, so
+      // expanding and collapsing the drawer never shifts the page.
+      return STRIP_W;
     }
 
     new ResizeObserver(() => { if (horizontal() && env.settings().bookmarks) fitSoon(); }).observe(content);
@@ -793,6 +895,15 @@
         env.menu.hide();
         if (env.hideTip) env.hideTip();
         renderContent();
+      },
+      // Re-render when custom folder icons change.
+      refreshIcons() {
+        let sig = '';
+        try { sig = JSON.stringify(env.folderIcons ? env.folderIcons() : {}); } catch (_) {}
+        if (sig === iconSig) return;
+        iconSig = sig;
+        update();
+        rebuildOpenFolderMenu();
       },
       refresh() { failed = false; if (env.settings().bookmarks) load(); else { data = null; treeSig = ''; lastKey = ''; } }
     };

@@ -1,7 +1,0 @@
-Fix: white/light site icons invisible on the light theme
-
-- Cause: site favicons are fixed-colour images, so white or light logos disappear against the light panel background (#fbfbfa). Built-in icons (gear, pin, bookmark, folder, window) already follow the theme through currentColor and were not affected.
-- tp-css.js: added a --fav-edge variable. Light themes get a thin dark rim (two small drop-shadows); the explicit dark theme and auto-with-dark-OS set it to none, so dark mode is unchanged.
-- tp-css.js: .fav img now applies filter:var(--fav-edge). Applies to tab icons, bookmark icons, strip/bar icons and folder-menu icons, since they all use .fav.
-- CSS only: no changes to the favicon loader (defaults.js), caching, retries or render logic, so icon loading speed and the no-flicker behaviour are unchanged.
-- Folder names were left as they are (rename needs a git move; the GitHub tools used here cannot move a folder with its icon PNGs).

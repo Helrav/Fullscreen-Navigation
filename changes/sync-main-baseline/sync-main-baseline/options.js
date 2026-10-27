@@ -46,23 +46,9 @@
     if (boxNote) boxNote.hidden = !box;
     const bmMode = document.querySelector('[data-bookmarks-mode]');
     if (bmMode) bmMode.hidden = !settings.bookmarks || !vertical;
-    document.querySelectorAll('[data-custom-colors]').forEach((row) => { row.hidden = !settings.customColors; });
-  }
-
-  // Optional custom colours for the settings page, matching the overlay.
-  function applyCustomColors() {
-    const st = document.documentElement.style;
-    if (!settings.customColors) {
-      ['--bg', '--card', '--fg', '--muted', '--line'].forEach((name) => st.removeProperty(name));
-      return;
-    }
-    const bg = settings.customBg, fg = settings.customFg;
-    st.setProperty('--card', bg);
-    st.setProperty('--bg', 'color-mix(in srgb,' + bg + ' 94%,' + fg + ')');
-    st.setProperty('--fg', fg);
-    st.setProperty('--muted', 'color-mix(in srgb,' + fg + ' 62%,' + bg + ')');
-    st.setProperty('--line', 'color-mix(in srgb,' + fg + ' 16%,' + bg + ')');
-    st.colorScheme = tpLuma(bg) > 0.5 ? 'light' : 'dark';
+    document.querySelectorAll('[data-bookmarks-on]').forEach((row) => { row.hidden = !settings.bookmarks; });
+    document.querySelectorAll('[data-theme-tint]').forEach((row) => { row.hidden = !settings.themeTint; });
+    document.querySelectorAll('[data-theme-off]').forEach((row) => { row.hidden = !!settings.themeTint; });
   }
 
   function applyTheme() {
@@ -71,10 +57,13 @@
       ? settings.accent
       : '#2f6fed';
     document.documentElement.dataset.theme = theme;
-    document.documentElement.style.setProperty('--accent', accent);
-    document.documentElement.style.colorScheme = theme === 'auto' ? 'light dark' : theme;
-    applyCustomColors();
+    // With a theme color on, the palette (surfaces, text and accent) comes from it.
+    tpApplyPalette(document.documentElement, settings, 'page');
+    if (!settings.themeTint) document.documentElement.style.setProperty('--accent', accent);
   }
+  try {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (settings.themeTint) applyTheme(); });
+  } catch (_) {}
 
   function fixZone() {
     settings.zoneLength = tpClamp(Math.round(settings.zoneLength), 5, 100);
