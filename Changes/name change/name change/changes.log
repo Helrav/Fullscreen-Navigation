@@ -1,0 +1,15 @@
+Rename: extension is now "Fullscreen Navigation" (short name "FullNav")
+
+Applied in this folder:
+- manifest.json: name "Fullscreen Navigation", new short_name "FullNav", new description, toolbar title "FullNav settings", Firefox id fullnav@example.com.
+- options.html: page title "FullNav settings", heading "Fullscreen Navigation", and the "Fullscreen new windows" help text now says FullNav.
+- README.md: title and text renamed.
+
+NOT applied (needs a git/sed pass, the GitHub tools used here cannot rename files):
+- tp-*.js files -> fn-*.js, including the file list in manifest.json.
+- Identifier and string prefixes: tpXxx -> fnXxx, TP_ -> FN_, TPX -> FNX, 'tp-refocus' -> 'fn-refocus'.
+- Remaining "Tab Peek" / tab-peek / tabPeek strings inside content.js, tp-*.js and background.js (for example the settings card title, the tab-peek-host element id and the tabPeekBookmarkClipboard storage key).
+- Folder rename to reflect this change.
+Until that pass is run the extension still loads, because manifest.json still points at the existing tp-*.js file names.
+
+Validation: manifest.json, options.html and README.md sizes match the expected edits. No live Chrome UI test was run.
