@@ -93,6 +93,16 @@
         const row = h('div', 'mi' + (it.disabled ? ' dis' : '') +
           (it.danger ? ' danger' : '') + ((it.sub || it.lazySub) ? ' has-sub' : '') +
           (it.clickSub ? ' click-sub' : ''));
+        if (it.bookmark) {
+          const bm = it.bookmark;
+          row.dataset.bmId = String(bm.id);
+          row.dataset.bmParent = bm.parentId == null ? '' : String(bm.parentId);
+          row.dataset.bmIndex = String(bm.index);
+          row.dataset.bmTitle = String(bm.title || '');
+          row.dataset.bmUrl = String(bm.url || '');
+          row.dataset.bmFolder = bm.folder ? '1' : '0';
+          row.draggable = true;
+        }
         if (it.tooltip && it.tooltip.title && typeof env.tip === 'function') {
           row.addEventListener('mouseenter', () => {
             const rect = row.getBoundingClientRect();
