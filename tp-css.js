@@ -341,6 +341,10 @@ globalThis.TPX.CSS = `
 .bm.hidden{display:none}
 .bm.pending-place{visibility:hidden}
 .bm.dragging-overlay{visibility:hidden!important}
+/* Folder popovers and context menus live beside the panel in the shared UI root,
+   so hide them explicitly while the overlay is being dragged. */
+.ui:has(.panel.dragging-overlay) .menu,
+.ui:has(.panel.dragging-overlay) .submenu{visibility:hidden!important;pointer-events:none!important}
 /* Bookmarks are a drawer attached directly to the overlay, with no arrow tab. */
 .bm[data-pos=right],.bm[data-pos=left],.bm[data-pos=floating-left],.bm[data-pos=floating-right]{flex-direction:row}
 .bm[data-pos=below],.bm[data-pos=above],.bm[data-pos=floating-top],.bm[data-pos=floating-bottom]{flex-direction:column}
