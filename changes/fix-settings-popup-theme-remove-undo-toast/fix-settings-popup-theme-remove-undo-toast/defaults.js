@@ -15,6 +15,10 @@ const TP_DEFAULTS = {
   winRect: null,            // {x,y,w,h} for the floating window
   theme: 'auto',
   accent: '#4f8cff',
+  // Optional custom colours; used only while customColors is on.
+  customColors: false,
+  customBg: '#fbfbfa',
+  customFg: '#1c1f23',
   showSearch: true,
   showNames: true,
   // Behavior
@@ -24,6 +28,11 @@ const TP_DEFAULTS = {
   sites: [],
   closeDelayMs: 350,
   closeOnPick: true,
+  // Collapse windows separately in each browser window's overlay.
+  perWindowCollapse: false,
+  // Windows opened (or tabs moved to a new window) through Tab Peek open fullscreen / without taking focus.
+  newWindowFullscreen: true,
+  openInBackground: true,
   searchIn: 'newtab',        // newtab | current
   // Bookmarks
   bookmarks: false,
@@ -33,6 +42,31 @@ const TP_DEFAULTS = {
 };
 
 const tpClamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+// Rough brightness (0 = black, 1 = white) of a #rrggbb colour.
+const tpLuma = (hex) => {
+  const n = parseInt(String(hex).slice(1), 16) || 0;
+  return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+};
+
+// CSS variables the overlay overrides while custom colours are on.
+const TP_CUSTOM_VARS = ['--bg', '--fg', '--muted', '--line', '--hover', '--sel', '--fav-edge'];
+function tpCustomVars(s) {
+  if (!s.customColors) return null;
+  const bg = s.customBg, fg = s.customFg;
+  const mix = (pct, base) => 'color-mix(in srgb,' + fg + ' ' + pct + '%,' + base + ')';
+  return {
+    '--bg': bg,
+    '--fg': fg,
+    '--muted': mix(62, bg),
+    '--line': mix(16, 'transparent'),
+    '--hover': mix(8, 'transparent'),
+    '--sel': mix(13, 'transparent'),
+    '--fav-edge': tpLuma(bg) > 0.5
+      ? 'drop-shadow(0 0 .5px rgba(20,24,30,.6)) drop-shadow(0 0 1px rgba(20,24,30,.35))'
+      : 'none'
+  };
+}
 
 function tpNormalize(stored) {
   const s = { ...TP_DEFAULTS, ...(stored || {}) };
@@ -57,6 +91,13 @@ function tpNormalize(stored) {
   s.zoneThickness = tpClamp(Number(s.zoneThickness) || 8, 1, 40);
   s.panelWidth = tpClamp(Number(s.panelWidth) || 300, 52, 800);
   s.barHeight = tpClamp(Number(s.barHeight) || 56, 40, 400);
+  const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : d);
+  s.customColors = !!s.customColors;
+  s.customBg = hex(s.customBg, TP_DEFAULTS.customBg);
+  s.customFg = hex(s.customFg, TP_DEFAULTS.customFg);
+  s.perWindowCollapse = !!s.perWindowCollapse;
+  s.newWindowFullscreen = s.newWindowFullscreen !== false;
+  s.openInBackground = s.openInBackground !== false;
   if (!Array.isArray(s.sites)) s.sites = [];
   if (s.winRect && ['x','y','w','h'].some((k) => !Number.isFinite(Number(s.winRect[k])))) s.winRect = null;
   return s;
