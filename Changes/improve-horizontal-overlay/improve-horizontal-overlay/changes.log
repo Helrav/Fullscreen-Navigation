@@ -1,0 +1,9 @@
+First-pass horizontal overlay UX redesign
+
+- Relocate the existing workspace to Changes/improve-horizontal-overlay/improve-horizontal-overlay/ before making changes.
+- Preserve existing source files, settings, and binary icon assets.
+- Intended first pass: make horizontal tab sizing responsive; default horizontal navigation to the current window; provide an explicit window picker; give expanded horizontal mode a wrapping, scrollable row/grid-like layout; inset tab surfaces while preserving clickable hit targets.
+- Keep the toolbar orientation based on the overlay edge; do not add a new toolbar-orientation setting.
+- Overwrite this log rather than appending.
+
+Validation: workspace relocation only; source edits will follow.

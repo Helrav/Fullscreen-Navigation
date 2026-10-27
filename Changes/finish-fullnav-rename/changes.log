@@ -1,9 +1,0 @@
-FullNav internal rename completed
-
-- Renamed the four browser modules to fn-bookmarks.js, fn-css.js, fn-menu.js, and fn-push.js and updated manifest references.
-- Renamed the shared FNX namespace, FN_ constants, and fn-prefixed helper identifiers across background.js, content.js, defaults.js, options.js, and the browser modules.
-- Updated the focus event to fn-refocus, the overlay host ID and drag payload labels to FullNav-based names, and the bookmark clipboard storage key to fullNavBookmarkClipboard.
-- Updated remaining in-code product labels to FullNav and retained the full extension name Fullscreen Navigation in manifest.json and the settings heading.
-- Workspace is Changes/finish-fullnav-rename/finish-fullnav-rename/.
-
-Validation: JavaScript syntax parsing, manifest JSON parsing, manifest script-reference checks, and legacy-name scans passed. No live browser UI test was run.
