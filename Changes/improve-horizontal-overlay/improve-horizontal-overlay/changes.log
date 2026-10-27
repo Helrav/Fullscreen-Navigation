@@ -1,9 +1,9 @@
-First-pass horizontal overlay UX redesign
+First-pass horizontal overlay UX update
 
-- Relocate the existing workspace to Changes/improve-horizontal-overlay/improve-horizontal-overlay/ before making changes.
-- Preserve existing source files, settings, and binary icon assets.
-- Intended first pass: make horizontal tab sizing responsive; default horizontal navigation to the current window; provide an explicit window picker; give expanded horizontal mode a wrapping, scrollable row/grid-like layout; inset tab surfaces while preserving clickable hit targets.
-- Keep the toolbar orientation based on the overlay edge; do not add a new toolbar-orientation setting.
-- Overwrite this log rather than appending.
+- Horizontal overlays now show tabs for the current browser window only; a window-switcher icon appears only when other windows exist and opens a picker to switch to them.
+- In the compact horizontal strip, tabs flex between a readable minimum of 112px and a maximum of 220px, then scroll if more tabs cannot fit.
+- When the horizontal bar is expanded to 72px or taller, tabs use a scrollable multirow grid instead of stretching across a single row.
+- Tab visuals are inset on a non-interactive surface while the tab wrapper remains the full click/drag target, preserving clicks near the screen edge.
+- Kept toolbar orientation tied to the overlay edge and left vertical/windowed layouts unchanged.
 
-Validation: workspace relocation only; source edits will follow.
+Validation: content.js passes JavaScript syntax parsing; CSS braces are balanced; manifest and script references remain unchanged. No live browser UI test was run.

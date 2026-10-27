@@ -737,6 +737,7 @@
     if (selected.has(t.id)) cls.push('selected');
     if (t.discarded) cls.push('dim');
     const d = h('div', cls.join(' '));
+    d.appendChild(h('span', 'tab-surface'));
     d.dataset.id = String(t.id);
     d.draggable = true;
     d.dataset.title = t.title || 'Untitled tab';
@@ -787,10 +788,16 @@
     const frag = document.createDocumentFragment();
     flat = [];
     const alive = new Set();
+    const allWindows = data.windows || [];
+    const horizontalTabs = !isVertical() && !isBox();
+    // Horizontal strips focus on this browser window; other windows are reached
+    // through the dedicated window picker rather than being mixed into the tab row.
+    allWindows.forEach((w) => w.tabs.forEach((t) => alive.add(t.id)));
+    const currentWindow = allWindows.find((w) => w.id === data.cur);
+    const windowsToRender = horizontalTabs && currentWindow ? [currentWindow] : allWindows;
     let renderedWindows = 0;
 
-    data.windows.forEach((w) => {
-      w.tabs.forEach((t) => alive.add(t.id));
+    windowsToRender.forEach((w) => {
       const list = filtering ? w.tabs.filter(matches) : w.tabs;
       if (filtering && !list.length) return;
       const isCur = w.id === data.cur;
@@ -863,6 +870,13 @@
     }
     if (!frag.childNodes.length) {
       frag.appendChild(h('div', 'empty', data.windows.length ? 'No matching tabs' : 'Loading tabs…'));
+    }
+
+    if (els.windowsBtn) {
+      const otherWindowCount = allWindows.filter((w) => w.id !== data.cur).length;
+      els.windowsBtn.hidden = !horizontalTabs || otherWindowCount === 0;
+      els.windowsBtn.title = otherWindowCount ? `Switch windows (${otherWindowCount})` : 'No other windows';
+      els.windowsBtn.setAttribute('aria-label', els.windowsBtn.title);
     }
 
     const st = els.list.scrollTop, sl = els.list.scrollLeft;
@@ -1148,6 +1162,34 @@
       { sep: true },
       { label: 'Close', shortcut: 'Alt+F4', danger: true, action: () => send({ type: 'closeWindow', windowId }) }
     ], x, y);
+  }
+
+  function showWindowPicker() {
+    if (!contextMenu || !els.windowsBtn) return;
+    const wins = data.windows || [];
+    const current = wins.find((w) => w.id === data.cur);
+    const others = wins.filter((w) => w.id !== data.cur);
+    const items = [];
+    if (current) items.push({ label: `Current window · ${current.tabs.length} tabs`, disabled: true });
+    if (others.length) {
+      if (items.length) items.push({ sep: true });
+      for (const win of others) {
+        const index = wins.findIndex((w) => w.id === win.id) + 1;
+        const name = String(win.name || '').trim() || `Window ${index}`;
+        const tabCount = win.tabs.length;
+        const activeTab = win.tabs.find((tab) => tab.active) || win.tabs[0];
+        items.push({
+          label: `${name} · ${tabCount} tab${tabCount === 1 ? '' : 's'}`,
+          disabled: !activeTab,
+          action: () => { if (activeTab) send({ type: 'activate', tabId: activeTab.id }); }
+        });
+      }
+    } else {
+      items.push({ label: 'No other windows', disabled: true });
+    }
+    const rect = els.windowsBtn.getBoundingClientRect();
+    const above = settings.edge === 'bottom';
+    contextMenu.showContext(items, rect.left, above ? rect.top : rect.bottom, above ? 'above' : 'below');
   }
 
   async function closeTabs(ids) {
@@ -1889,7 +1931,12 @@
   }
 
   function syncOverlayCollapsedState() {
-    if (els.panel) els.panel.classList.toggle('overlay-collapsed', isOverlayCollapsed());
+    if (els.panel) {
+      els.panel.classList.toggle('overlay-collapsed', isOverlayCollapsed());
+      // The default 56px bar stays a compact strip. Only a deliberately taller
+      // horizontal bar switches to the multrow layout.
+      els.panel.classList.toggle('horizontal-expanded', !isVertical() && !isBox() && Number(settings.barHeight) >= 72);
+    }
     syncOverlayToggle();
   }
 
@@ -2361,7 +2408,14 @@
       e.stopPropagation();
       clearSearchInput(true);
     });
-    els.searchRow.append(els.overlayToggle, els.searchToggle, els.searchWrap);
+    els.windowsBtn = h('button', 'btn windowsbtn');
+    els.windowsBtn.type = 'button';
+    els.windowsBtn.title = 'Switch windows';
+    els.windowsBtn.setAttribute('aria-label', 'Switch windows');
+    els.windowsBtn.appendChild(windowIcon());
+    els.windowsBtn.hidden = true;
+    els.windowsBtn.addEventListener('click', () => showWindowPicker());
+    els.searchRow.append(els.overlayToggle, els.searchToggle, els.windowsBtn, els.searchWrap);
     els.searchToggle.addEventListener('click', () => {
       if (searchPopupOpen) closeSearchPopup(true);
       else openSearchPopup();

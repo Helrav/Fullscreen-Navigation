@@ -524,3 +524,102 @@ globalThis.FNX.CSS = `
 }
 .bm-drag-preview svg{width:23px;height:23px;fill:currentColor}
 `;
+
+
+/* ---------- horizontal layout: compact strip + expanded multirow tabs ---------- */
+/* The surface is decorative; the full tab element remains the hit/click/drag target. */
+.tab-surface{position:absolute;z-index:0;inset:0;pointer-events:none}
+.panel[data-dir=h] .list{padding:0;gap:2px}
+.panel[data-dir=h] .whead,
+.panel[data-dir=h] .windivider{display:none!important}
+.panel[data-dir=h] .windowsbtn{flex:none}
+.windowsbtn[hidden]{display:none!important}
+.panel[data-dir=v] .windowsbtn{display:none!important}
+
+.panel[data-dir=h] .tab{
+  position:relative;
+  width:auto;
+  min-width:0;
+  background:transparent;
+  box-shadow:none;
+  outline:none;
+}
+.panel[data-dir=h] .tab-surface{
+  inset:3px;
+  border-radius:8px;
+  background:transparent;
+  transition:background .12s ease,box-shadow .12s ease;
+}
+.panel[data-dir=h] .tab>:not(.tab-surface){position:relative;z-index:1}
+.panel[data-dir=h] .tab:hover{background:transparent}
+.panel[data-dir=h] .tab:hover .tab-surface{background:var(--hover)}
+.panel[data-dir=h] .tab.active{background:transparent;box-shadow:none}
+.panel[data-dir=h] .tab.active .tab-surface{
+  background:color-mix(in srgb,var(--accent) 16%,transparent);
+  box-shadow:inset 0 -3px 0 var(--accent);
+}
+.panel[data-dir=h][data-edge=bottom] .tab.active .tab-surface{
+  box-shadow:inset 0 3px 0 var(--accent);
+}
+.panel[data-dir=h] .tab.selected{background:transparent;outline:none}
+.panel[data-dir=h] .tab.selected .tab-surface{
+  background:color-mix(in srgb,var(--accent) 30%,transparent);
+  box-shadow:inset 0 0 0 1px var(--accent);
+}
+.panel[data-dir=h] .tab.ctx{background:transparent}
+.panel[data-dir=h] .tab.ctx .tab-surface{background:var(--sel)}
+
+/* In the short strip, tabs shrink evenly to a readable minimum, then scroll. */
+.panel[data-dir=h]:not(.horizontal-expanded) .list{
+  display:flex;
+  flex-direction:row;
+  flex-wrap:nowrap;
+  align-items:stretch;
+  overflow-x:auto;
+  overflow-y:hidden;
+  gap:2px;
+}
+.panel[data-dir=h]:not(.horizontal-expanded) .tab{
+  flex:1 1 180px;
+  min-width:112px;
+  max-width:220px;
+  min-height:0;
+  height:100%;
+  align-self:stretch;
+  padding:5px 8px;
+}
+.panel[data-dir=h]:not(.horizontal-expanded) .ghead{
+  flex:0 0 auto;
+  height:auto;
+  align-self:center;
+  padding:4px 6px;
+  margin:0 2px;
+  border:0;
+}
+
+/* When the bar is expanded, use useful rows rather than stretching every tab vertically. */
+.panel[data-dir=h].horizontal-expanded .list{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(min(180px,100%),1fr));
+  grid-auto-rows:minmax(38px,auto);
+  align-content:start;
+  justify-content:start;
+  overflow:auto;
+  gap:4px;
+}
+.panel[data-dir=h].horizontal-expanded .tab{
+  width:100%;
+  min-width:0;
+  max-width:none;
+  min-height:38px;
+  height:auto;
+  align-self:stretch;
+  padding:5px 10px;
+}
+.panel[data-dir=h].horizontal-expanded .ghead{
+  grid-column:1 / -1;
+  height:auto;
+  min-height:26px;
+  padding:4px 10px;
+  border:0;
+}
