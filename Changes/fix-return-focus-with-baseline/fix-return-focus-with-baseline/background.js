@@ -37,6 +37,47 @@ async function refreshFullscreenAfterTabMove(windowId, allowFocusFallback) {
   if (check && check.state !== 'fullscreen') await ensureWindowFullscreen(windowId, allowFocusFallback);
 }
 
+// A window opened in the background must NOT be switched to fullscreen right
+// away: changing the state of an unfocused window makes the browser/OS activate
+// it, which is what pulled focus off the page you were on and left that page
+// unfocused (no hover, no keys) even after focus was handed back. Instead the
+// window is remembered here and goes fullscreen the first time you focus it.
+// Maps window id -> true when it also needs the toolbar refresh after a tab move.
+const PENDING_FULLSCREEN_KEY = 'tpPendingFullscreen';
+const pendingStore = () => (api.storage && api.storage.session) || api.storage.local;
+
+async function readPendingFullscreen() {
+  try {
+    const r = await pendingStore().get(PENDING_FULLSCREEN_KEY);
+    const value = r && r[PENDING_FULLSCREEN_KEY];
+    return value && typeof value === 'object' ? value : {};
+  } catch (_) { return {}; }
+}
+
+async function writePendingFullscreen(map) {
+  try { await pendingStore().set({ [PENDING_FULLSCREEN_KEY]: map }); } catch (_) {}
+}
+
+async function deferFullscreen(windowId, refresh) {
+  if (!Number.isInteger(windowId)) return;
+  const map = await readPendingFullscreen();
+  map[windowId] = !!refresh;
+  await writePendingFullscreen(map);
+}
+
+async function applyDeferredFullscreen(windowId) {
+  if (!Number.isInteger(windowId) || windowId < 0) return;
+  const map = await readPendingFullscreen();
+  if (!Object.prototype.hasOwnProperty.call(map, windowId)) return;
+  const refresh = !!map[windowId];
+  delete map[windowId];
+  await writePendingFullscreen(map);
+  const info = await api.windows.get(windowId).catch(() => null);
+  if (!info || info.state === 'fullscreen') return;
+  if (refresh) await refreshFullscreenAfterTabMove(windowId, true);
+  else await ensureWindowFullscreen(windowId);
+}
+
 // Opens a window for Tab Peek: fullscreen (so the overlay can show in it) and/or
 // without taking focus, as the settings ask.
 // Fullscreen is applied as a separate step AFTER the window exists, the same as
@@ -55,26 +96,40 @@ async function createWindowFor(options, prefs, returnWindowId) {
   }
   if (!win) throw lastError || new Error('window-create-failed');
 
+  // The user wanted to stay where they were.
+  const stayPut = prefs.background && Number.isInteger(returnWindowId) && returnWindowId !== win.id;
+
   if (prefs.fullscreen && Number.isInteger(win.id)) {
-    await ensureWindowFullscreen(win.id);
+    // A window you are not going to is not switched to fullscreen now (that
+    // activates it and takes focus from your page); it goes fullscreen the
+    // first time you focus it.
+    if (stayPut) await deferFullscreen(win.id, false);
+    else await ensureWindowFullscreen(win.id);
   }
 
-  // The user wanted to stay where they were: hand focus back to that window.
-  if (prefs.background && Number.isInteger(returnWindowId) && returnWindowId !== win.id) {
-    await returnFocusTo(returnWindowId);
-  }
+  // Hand focus back to the window the user was in.
+  if (stayPut) await returnFocusTo(returnWindowId);
   return win;
 }
 
 // Giving the window focus back is not always enough: the page inside can stay
 // "unfocused" (no hover, no key input) until it is clicked. So focus the window
-// twice with a gap, re-activate its current tab, and tell the page to wake up.
+// twice with a gap, make sure it really kept focus, re-activate its current
+// tab, and tell the page to wake up.
 async function returnFocusTo(windowId) {
   const focus = () => api.windows.update(windowId, { focused: true }).catch(() => {});
   await focus();
   const [tab] = await api.tabs.query({ windowId, active: true }).catch(() => []);
   await new Promise((resolve) => setTimeout(resolve, 150));
   await focus();
+  // The other window can finish activating a moment later and take focus back,
+  // so check and retry instead of assuming the first call stuck.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const info = await api.windows.get(windowId).catch(() => null);
+    if (!info || info.focused) break;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await focus();
+  }
   if (tab && Number.isInteger(tab.id)) {
     await api.tabs.update(tab.id, { active: true }).catch(() => {});
     api.tabs.sendMessage(tab.id, { type: 'tp-refocus' }).catch(() => {});
@@ -85,7 +140,7 @@ async function returnFocusTo(windowId) {
 // general API for naming their own windows. These labels intentionally reset
 // when the browser starts again because window IDs may be reused.
 if (api.runtime.onStartup) api.runtime.onStartup.addListener(() => {
-  api.storage.local.remove('windowNames');
+  api.storage.local.remove(['windowNames', PENDING_FULLSCREEN_KEY]);
 });
 
 if (api.windows && api.windows.onRemoved) {
@@ -97,6 +152,20 @@ if (api.windows && api.windows.onRemoved) {
         await api.storage.local.set({ windowNames });
       }
     } catch (_) {}
+    try {
+      const pending = await readPendingFullscreen();
+      if (Object.prototype.hasOwnProperty.call(pending, id)) {
+        delete pending[id];
+        await writePendingFullscreen(pending);
+      }
+    } catch (_) {}
+  });
+}
+
+// A background window becomes fullscreen the first time it gets focus.
+if (api.windows && api.windows.onFocusChanged) {
+  api.windows.onFocusChanged.addListener((windowId) => {
+    applyDeferredFullscreen(windowId).catch(() => {});
   });
 }
 
@@ -667,7 +736,13 @@ async function moveTabsToNewWindow(ids, currentTabId, sourceWindowId) {
     return { ok: false, reason: 'move-failed' };
   }
 
-  if (prefs.fullscreen) await refreshFullscreenAfterTabMove(win.id, visibleTabIsMoving);
+  if (prefs.fullscreen) {
+    // Only the window you are going to is made fullscreen now. A window you are
+    // not going to is made fullscreen the first time you focus it, because
+    // switching an unfocused window to fullscreen pulls focus off your page.
+    if (visibleTabIsMoving) await refreshFullscreenAfterTabMove(win.id, true);
+    else await deferFullscreen(win.id, true);
+  }
 
   if (visibleTabIsMoving && movedIds.includes(currentTabId)) {
     await api.tabs.update(currentTabId, { active: true }).catch(() => {});
