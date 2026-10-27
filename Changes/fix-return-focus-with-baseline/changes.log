@@ -1,0 +1,9 @@
+Fix: restore the known-good Test-root return-focus sequence for background tab moves
+
+- Rename the existing workspace to Changes/fix-return-focus-with-baseline/fix-return-focus-with-baseline/ before editing.
+- Restore returnFocusTo() from the working background.js at the repository root on branch Test: focus the source window, wait briefly, focus it again, reactivate its existing active tab, and send tp-refocus.
+- Restore the matching root content.js tp-refocus listener so it refreshes Tab Peek state without the new acknowledgement loop.
+- Keep the current-tab gate in moveTabsToNewWindow(): only focus the destination when the tab visible in the invoking page is included in the move; otherwise call returnFocusTo(sourceWindowId).
+- Keep the direct existing-tab destination creation and fullscreen refresh logic.
+
+Validation: background.js and content.js pass JavaScript syntax parsing. No live Chrome UI test was run.

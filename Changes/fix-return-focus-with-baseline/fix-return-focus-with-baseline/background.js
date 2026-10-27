@@ -66,47 +66,19 @@ async function createWindowFor(options, prefs, returnWindowId) {
   return win;
 }
 
-// Restore the source window without unnecessarily bouncing focus when it is
-// already frontmost. The page acknowledges whether its renderer has focus;
-// if it has not, re-focus the window and retry after the browser has settled.
+// Giving the window focus back is not always enough: the page inside can stay
+// "unfocused" (no hover, no key input) until it is clicked. So focus the window
+// twice with a gap, re-activate its current tab, and tell the page to wake up.
 async function returnFocusTo(windowId) {
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const focus = () => api.windows.update(windowId, { focused: true }).catch(() => null);
-  const lastFocused = await api.windows.getLastFocused().catch(() => null);
-  let needsFocus = !lastFocused || lastFocused.id !== windowId;
-
-  for (const delay of [60, 120, 220]) {
-    if (needsFocus) await focus();
-    await wait(delay);
-
-    const [tab] = await api.tabs.query({ windowId, active: true }).catch(() => []);
-    const focusedWindow = await api.windows.getLastFocused().catch(() => null);
-    if (!tab || !Number.isInteger(tab.id)) {
-      if (focusedWindow && focusedWindow.id === windowId) return true;
-      needsFocus = true;
-      continue;
-    }
-
-    const response = await api.tabs.sendMessage(tab.id, { type: 'tp-refocus' }).catch(() => null);
-    const confirmedWindow = await api.windows.getLastFocused().catch(() => null);
-    // No response usually means the URL does not allow content scripts. In that
-    // case, the browser-level focus is the only available confirmation.
-    if (confirmedWindow && confirmedWindow.id === windowId &&
-        (!response || (response.visible === true && response.hasFocus === true))) {
-      return true;
-    }
-    needsFocus = true;
-  }
-
-  // Last-resort hand-back. Do not reactivate the tab after focusing the window:
-  // that redundant order was part of the renderer-focus race.
+  const focus = () => api.windows.update(windowId, { focused: true }).catch(() => {});
   await focus();
-  await wait(120);
   const [tab] = await api.tabs.query({ windowId, active: true }).catch(() => []);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await focus();
   if (tab && Number.isInteger(tab.id)) {
-    await api.tabs.sendMessage(tab.id, { type: 'tp-refocus' }).catch(() => null);
+    await api.tabs.update(tab.id, { active: true }).catch(() => {});
+    api.tabs.sendMessage(tab.id, { type: 'tp-refocus' }).catch(() => {});
   }
-  return false;
 }
 
 // Tab Peek keeps window labels internally because browsers do not expose a
