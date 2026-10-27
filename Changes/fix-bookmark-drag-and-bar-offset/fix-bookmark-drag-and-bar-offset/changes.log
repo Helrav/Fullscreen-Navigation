@@ -1,8 +1,7 @@
 Follow-up fix: bookmark dragging and left-aligned bar placement
 
-- Relocate the existing workspace to Changes/fix-bookmark-drag-and-bar-offset/fix-bookmark-drag-and-bar-offset/ before editing.
-- Use the existing barOffset callback so the horizontal bookmark bar begins after a left-aligned Other windows popover instead of rendering underneath it.
-- Remove mousedown default cancellation from draggable bookmark entries so native drag initiation is not blocked. Keep the non-draggable toolbar/more buttons unchanged.
-- Preserve all DeepSeek work, source files, and binary assets; overwrite this fix's changes.log rather than appending.
+- Use the existing barOffset callback so a left-aligned Other windows popover shifts the horizontal bookmark bar's starting position instead of overlapping it.
+- Removed mousedown default cancellation from the actual draggable bookmark entries in both the horizontal bar and vertical icon strip, allowing native drag initiation. Non-draggable controls retain their existing behavior.
+- Preserved the completed popover/menu, bookmark reordering, and bookmark-open-at-drop operations.
 
-Validation: relocation only; source changes follow.
+Validation: fn-bookmarks.js passes JavaScript syntax parsing; its barOffset callback is now read and the two draggable bookmark item handlers no longer cancel mousedown. No live browser UI test was run.

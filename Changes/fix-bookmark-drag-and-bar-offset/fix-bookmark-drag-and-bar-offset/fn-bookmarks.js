@@ -377,7 +377,6 @@
         b.title = label(n) || n.url || '';
         markBookmarkDraggable(b, n, index);
         attachBookmarkTooltip(b, n);
-        b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
           b.classList.add('bm-folder-menu-trigger');
@@ -457,7 +456,6 @@
         b.type = 'button';
         b.appendChild(icon(n));
         markBookmarkDraggable(b, n, index);
-        b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('mouseenter', () => {
           if (isOpenRootFolder(n)) {
             env.hideTip();
@@ -821,6 +819,7 @@
       // end; the bar keeps its place above/below the rail and simply yields
       // room sideways, letting the normal overflow logic fill its >> menu.
       const barInset = (!previewing && env.barInset) ? env.barInset() : 0;
+      const barOffset = (!previewing && env.barOffset) ? env.barOffset() : 0;
       if (pos === 'right' || pos === 'left') {
         st.top = (r.top / u) + 'px';
         st.height = (r.height / u) + 'px';
@@ -832,7 +831,7 @@
         const barWidth = (pos === 'below' || pos === 'above')
           ? Math.max(1, (r.width / u) - barInset)
           : (r.width / u);
-        st.left = horizontalEdge ? '0px' : (r.left / u) + 'px';
+        st.left = horizontalEdge ? (barOffset + 'px') : (r.left / u) + 'px';
         st.width = barWidth + 'px';
         st.height = 'auto';
         st.top = ((pos === 'below' ? r.bottom : r.top) / u) + 'px';
