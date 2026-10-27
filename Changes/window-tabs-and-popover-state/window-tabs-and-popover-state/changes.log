@@ -1,8 +1,0 @@
-Window-tab mode menu and shared popover collapse state
-
-- Added a horizontal-strip context-menu action to switch between “Show tabs from this window only” and “Show tabs from all windows”, immediately above the bookmark-bar action.
-- Renamed the popover placement actions to “Position button to the left/right”.
-- Left placement now puts the Other windows button before the search toolbar. The existing bookmark-bar offset keeps the bar clear of a left-aligned popover.
-- Added a dedicated persisted collapse key for each background window in the Other windows popover, shared across browser windows and independent of the main overlay’s per-window collapse setting. Existing collapse state is used as a migration fallback.
-
-Validation: content.js passes JavaScript syntax parsing; source checks confirm the mode labels, button placement, bookmark offset binding, and shared collapse handling. No live Chrome/browser UI test was run.

@@ -1,0 +1,7 @@
+Fix shared popover collapse and left-side bookmark-bar push
+
+Scope:
+- Persist the Other windows popover's icons-only/full-tab display state through shared extension storage so new tabs/windows inherit it and open ones synchronize.
+- Make the left-aligned popover push the bookmark bar from the left by subtracting the left offset from the available bar width, rather than applying a right-side inset at the same time.
+
+Validation: source updates are next; no browser UI test has been run.
