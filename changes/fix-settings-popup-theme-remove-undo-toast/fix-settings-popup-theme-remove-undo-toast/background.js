@@ -1,5 +1,36 @@
 const api = globalThis.browser || globalThis.chrome;
 
+// Defaults are on; the stored settings come from the options page.
+async function newWindowPrefs() {
+  let s = {};
+  try { s = (await api.storage.local.get('settings')).settings || {}; } catch (_) {}
+  return { fullscreen: s.newWindowFullscreen !== false, background: s.openInBackground !== false };
+}
+
+// Opens a window for Tab Peek: fullscreen (so the overlay can show in it) and/or
+// without taking focus, as the settings ask. If the browser rejects the
+// combination, fall back step by step, keeping fullscreen ahead of background.
+async function createWindowFor(options, prefs) {
+  const attempts = [];
+  if (prefs.fullscreen && prefs.background) attempts.push({ ...options, state: 'fullscreen', focused: false });
+  if (prefs.fullscreen) attempts.push({ ...options, state: 'fullscreen' });
+  if (prefs.background) attempts.push({ ...options, focused: false });
+  attempts.push({ ...options });
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const win = await api.windows.create(attempt);
+      if (win) {
+        if (prefs.fullscreen && win.state !== 'fullscreen' && Number.isInteger(win.id)) {
+          api.windows.update(win.id, { state: 'fullscreen' }).catch(() => {});
+        }
+        return win;
+      }
+    } catch (error) { lastError = error; }
+  }
+  throw lastError || new Error('window-create-failed');
+}
+
 // Tab Peek keeps window labels internally because browsers do not expose a
 // general API for naming their own windows. These labels intentionally reset
 // when the browser starts again because window IDs may be reused.
@@ -206,12 +237,12 @@ async function openFolderBookmarks(folderId, operation, senderTab) {
       return { ok: true, count: opened.length };
     }
     case 'openFolderWindow': {
-      const win = await api.windows.create({ url: urls });
+      const win = await createWindowFor({ url: urls }, await newWindowPrefs());
       if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
       return { ok: true, count: urls.length };
     }
     case 'openFolderIncognito': {
-      const win = await api.windows.create({ url: urls, incognito: true });
+      const win = await createWindowFor({ url: urls, incognito: true }, await newWindowPrefs());
       if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
       return { ok: true, count: urls.length };
     }
@@ -243,17 +274,17 @@ async function bookmarkAction(message, sender) {
 
       case 'openTab':
         if (!url) return { ok: false, reason: 'missing-url' };
-        await api.tabs.create({ url, ...(senderTab && Number.isInteger(senderTab.windowId) ? { windowId: senderTab.windowId } : {}) });
+        await api.tabs.create({ url, active: !(await newWindowPrefs()).background, ...(senderTab && Number.isInteger(senderTab.windowId) ? { windowId: senderTab.windowId } : {}) });
         return { ok: true };
 
       case 'openWindow':
         if (!url) return { ok: false, reason: 'missing-url' };
-        await api.windows.create({ url });
+        await createWindowFor({ url }, await newWindowPrefs());
         return { ok: true };
 
       case 'openIncognito':
         if (!url) return { ok: false, reason: 'missing-url' };
-        await api.windows.create({ url, incognito: true });
+        await createWindowFor({ url, incognito: true }, await newWindowPrefs());
         return { ok: true };
 
       case 'openFolder':
@@ -590,9 +621,12 @@ async function handle(message, sender) {
       await api.tabs.create({ ...(Number.isInteger(targetWindowId) ? { windowId: targetWindowId } : {}) });
       return { ok: true };
     }
-    case 'newWindow':
-      await api.windows.create({});
+    case 'newWindow': {
+      // A blank window you asked for: fullscreen if wanted, but you go to it.
+      const prefs = await newWindowPrefs();
+      await createWindowFor({}, { fullscreen: prefs.fullscreen, background: false });
       return { ok: true };
+    }
     case 'closeWindow': {
       if (!Number.isInteger(message.windowId)) return { ok: false, reason: 'invalid-window' };
       await api.windows.remove(message.windowId);
@@ -645,7 +679,7 @@ async function handle(message, sender) {
           break;
         }
         case 'newWindow': {
-          const win = await api.windows.create({ tabId: ids[0] });
+          const win = await createWindowFor({ tabId: ids[0] }, await newWindowPrefs());
           const rest = ids.slice(1);
           if (rest.length && win && Number.isInteger(win.id)) await api.tabs.move(rest, { windowId: win.id, index: -1 });
           break;
