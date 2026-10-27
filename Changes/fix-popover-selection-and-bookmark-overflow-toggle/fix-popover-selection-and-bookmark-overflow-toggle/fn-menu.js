@@ -303,7 +303,8 @@
       if (target && target.closest && target.closest('.prompt,.backdrop')) return;
       const insideMenu = target && target.closest && target.closest('.menu');
       const folderTrigger = target && target.closest && target.closest('.bm-folder-menu-trigger');
-      if (isOpen() && !insideMenu && !folderTrigger) hide();
+      const overflowTrigger = target && target.closest && target.closest('.bmmore');
+      if (isOpen() && !insideMenu && !folderTrigger && !overflowTrigger) hide();
     };
     root.addEventListener('mousedown', dismissOverlayMenuOutside, true);
     // The horizontal bookmarks bar can receive clicks in places where its own

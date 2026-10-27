@@ -819,7 +819,12 @@
     const filtering = !!filter.trim();
     const frag = document.createDocumentFragment();
     flat = [];
+    // Preserve selections from background windows when only the current window
+    // is rendered inline. The Other windows popover is also a selectable list.
     const alive = new Set();
+    for (const win of data.windows || []) {
+      for (const tab of win.tabs || []) alive.add(tab.id);
+    }
     let renderedWindows = 0;
     // The rail can either stay compact (current browser window only) or show
     // every window inline with its icon, tab count and divider. In compact mode,
@@ -835,7 +840,6 @@
     const showWindowHeader = !currentOnly;
 
     windows.forEach((w) => {
-      w.tabs.forEach((t) => alive.add(t.id));
       const list = filtering ? w.tabs.filter(matches) : w.tabs;
       if (filtering && !list.length) return;
       const isCur = w.id === data.cur;

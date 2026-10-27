@@ -1,7 +1,7 @@
-Fix popover tab selection and bookmark overflow-menu toggling
+Fix tab selection in the Other windows popover and toggle the bookmark overflow menu
 
-Scope:
-- Make background-window tab selection in the Other windows popover retain selected tabs when the main horizontal strip rerenders, so Ctrl-click and Shift-click can behave like vertical-mode selection.
-- Make the horizontal bookmark overflow (») popup toggle closed when the same button is clicked again.
+- Preserve selected tabs from every browser window during the main list render. In horizontal current-window-only mode, the old cleanup only considered the current window, so Ctrl-click and Shift-click selections from the Other windows popover were immediately cleared. The popover keeps using the same Ctrl/Shift selection logic as the vertical list.
+- Make the bookmark bar's “»” overflow popup close when the same button is clicked again.
+- Exempt the overflow trigger from menu outside-dismiss handling, so the menu is still present when its second click handler runs. Other folder/context menus do not inherit the overflow-toggle ownership.
 
-Validation: workspace relocation only; source changes follow.
+Validation: content.js, fn-bookmarks.js, and fn-menu.js pass JavaScript syntax parsing. Source checks confirm background selections are retained and the overflow trigger can receive the second click. No live browser UI test was run.

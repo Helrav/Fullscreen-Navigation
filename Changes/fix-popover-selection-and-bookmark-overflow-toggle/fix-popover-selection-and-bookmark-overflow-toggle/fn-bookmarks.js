@@ -11,6 +11,7 @@
     let data = null, loading = false, failed = false, lastKey = '', fitRaf = 0;
     const openIds = new Set();
     let openFolderMenuId = null;
+    let openMoreMenu = false;
 
     const el = h('div', 'bm hidden');
     const content = h('div', 'bmc');
@@ -239,6 +240,7 @@
     }
 
     function toggleFolderMenu(n, button, side) {
+      openMoreMenu = false;
       const id = String(n.id);
       if (env.menu.isOpen() && openFolderMenuId === id) {
         env.menu.hide();
@@ -256,6 +258,7 @@
 
     function hoverSwitchFolderMenu(n, button, side) {
       if (!env.menu.isFolderHoverActive || !env.menu.isFolderHoverActive()) return;
+      openMoreMenu = false;
       const id = String(n.id);
       if (openFolderMenuId === id) return;
       openFolderMenuId = id;
@@ -266,6 +269,7 @@
 
 
     async function showContextMenu(e, n) {
+      openMoreMenu = false;
       e.preventDefault();
       e.stopPropagation();
       // Remember which row was clicked (before any await) so popups can sit beside it.
@@ -423,6 +427,16 @@
         if (cut < 0) { more.style.display = 'none'; return; }
         for (let i = cut; i < items.length; i++) items[i].style.display = 'none';
         more.onclick = () => {
+          // The menu's outside-dismiss handler exempts this trigger so the
+          // second click reaches this toggle before the menu is removed.
+          if (openMoreMenu && env.menu.isMainOpen && env.menu.isMainOpen()) {
+            env.menu.hide();
+            openMoreMenu = false;
+            openFolderMenuId = null;
+            return;
+          }
+          openMoreMenu = true;
+          openFolderMenuId = null;
           const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
           showFolderMenuBeside(toItems(data.bar.slice(cut)), more.getBoundingClientRect(), side);
         };
@@ -928,6 +942,7 @@
       },
       closeNavigation() {
         openFolderMenuId = null;
+        openMoreMenu = false;
         openIds.clear();
         env.menu.hide();
         if (env.hideTip) env.hideTip();
