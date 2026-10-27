@@ -34,8 +34,8 @@
   let keepPeekOpenAfterEscape = false;
   let lastPointer = { x: -1, y: -1 };
   let windowNames = {};
-  // Horizontal rails show the current browser window only. Other windows live
-  // in a vertical popover anchored to the right end of the strip.
+  // Horizontal rails can show the current window or all windows. In current-only
+  // mode, other windows live in a vertical popover anchored to either strip end.
   let winPopOpen = false, winDocDown = null, winPopIcons = false, winPopPinned = false, hoverWinPop = false;
   const DEFAULT_TOOLBAR_ORDER = ['bookmarks', 'pin', 'settings'];
   let toolbarOrder = [...DEFAULT_TOOLBAR_ORDER];
@@ -1014,12 +1014,19 @@
   function winPopAlign() { return settings.winPopAlign === 'left' ? 'left' : 'right'; }
 
   function syncWinButtonPlacement() {
-    if (!els.panel || !els.winBtn || !els.scrollPrev || !els.edgeTools) return;
+    if (!els.panel || !els.winBtn || !els.edgeTools) return;
     const align = winPopAlign();
     els.winBtn.dataset.align = align;
-    const anchor = align === 'left' ? els.scrollPrev : els.edgeTools;
-    if (els.winBtn.parentNode === els.panel && els.winBtn.nextSibling === anchor) return;
-    els.panel.insertBefore(els.winBtn, anchor);
+    if (align === 'left') {
+      // The left position is before the search toolbar, not before the tab
+      // scrolling controls. The matching popover/bookmark offset keeps them clear.
+      if (els.panel.firstElementChild !== els.winBtn) {
+        els.panel.insertBefore(els.winBtn, els.panel.firstElementChild);
+      }
+      return;
+    }
+    if (els.winBtn.parentNode === els.panel && els.winBtn.nextSibling === els.edgeTools) return;
+    els.panel.insertBefore(els.winBtn, els.edgeTools);
   }
 
   function setWinPopAlign(align) {
@@ -1036,13 +1043,19 @@
     setWinPopAlign(winPopAlign() === 'left' ? 'right' : 'left');
   }
 
+  function toggleHorizontalWindowsMode() {
+    settings.horizontalWindows = settings.horizontalWindows === 'all' ? 'current' : 'all';
+    saveSettings();
+    update();
+  }
+
   function showWinPopPositionMenu(e) {
     if (!contextMenu) return;
     e.preventDefault();
     e.stopPropagation();
     const left = winPopAlign() === 'left';
     contextMenu.showContext([{
-      label: left ? 'Position other windows to the right' : 'Position other windows to the left',
+      label: left ? 'Position button to the right' : 'Position button to the left',
       action: toggleWinPopAlign
     }], e.clientX, e.clientY, undefined, true);
   }
@@ -1108,7 +1121,7 @@
     const frag = document.createDocumentFragment();
     winPopFlat = [];
     others.forEach((w, index) => {
-      const closed = !!collapsed[collapseKey('w' + w.id)];
+      const closed = isWinPopWindowCollapsed(w.id);
       const win = h('div', 'win inactive-window' + (closed ? ' closed' : ''));
       win.dataset.win = String(w.id);
       const wh = h('div', 'whead' + (closed ? ' closed' : ''));
@@ -1302,6 +1315,32 @@
   // its own collapsed state: the key is namespaced by the window being viewed.
   function collapseKey(key) {
     return settings.perWindowCollapse && data.cur >= 0 ? 'v' + data.cur + ':' + key : key;
+  }
+
+  // Popover sections are keyed by the background window itself, not by the
+  // overlay hosting the popover. This keeps their collapsed state shared across
+  // every browser window, even when the main overlay uses per-window collapse.
+  function winPopCollapseKey(windowId) {
+    return 'wp:' + String(windowId);
+  }
+
+  function isWinPopWindowCollapsed(windowId) {
+    const key = winPopCollapseKey(windowId);
+    if (Object.prototype.hasOwnProperty.call(collapsed, key)) return !!collapsed[key];
+
+    // Honor an older saved collapse state once, then the dedicated shared key
+    // takes precedence so expanding in one window won't re-collapse elsewhere.
+    if (collapsed['w' + windowId]) return true;
+    return Object.keys(collapsed).some((oldKey) =>
+      oldKey.endsWith(':w' + windowId) && !!collapsed[oldKey]
+    );
+  }
+
+  function toggleWinPopCollapse(windowId) {
+    const key = winPopCollapseKey(windowId);
+    collapsed[key] = isWinPopWindowCollapsed(windowId) ? 0 : 1;
+    saveCollapsed();
+    renderWinPop();
   }
 
   function toggleCollapse(key) {
@@ -1501,8 +1540,8 @@
     const reopen = await getReopenMenuItem();
     // In "Current window only" there is no window header to right-click, so the
     // strip's own menu is the place to name the current browser window.
-    const compactHorizontal = !isBox() && !isVertical()
-      && settings.horizontalWindows !== 'all';
+    const horizontalRail = !isBox() && !isVertical();
+    const compactHorizontal = horizontalRail && settings.horizontalWindows !== 'all';
     const current = compactHorizontal
       ? (data.windows || []).find((win) => win.id === (Number.isInteger(windowId) ? windowId : data.cur))
       : null;
@@ -1518,8 +1557,17 @@
         action: () => promptText('Name window', current.name || '', (name) => send({ type: 'renameWindow', windowId: current.id, name }))
       });
     }
+    items.push({ sep: true });
+    if (horizontalRail) {
+      items.push({
+        label: settings.horizontalWindows === 'all'
+          ? 'Show tabs from this window only'
+          : 'Show tabs from all windows',
+        action: toggleHorizontalWindowsMode
+      });
+      items.push({ sep: true });
+    }
     items.push(
-      { sep: true },
       { label: settings.bookmarks ? 'Hide bookmark bar' : 'Show bookmark bar', action: toggleBookmarkPanel },
       { label: 'Settings', action: () => openSettingsCard() }
     );
@@ -2770,7 +2818,7 @@
     els.bookmarkBtn = iconBtn('btn bookmarkbtn', 'Show bookmarks', 'M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z');
     els.pin = iconBtn('btn pin', 'Pin open', ICON_PIN);
     els.gear = iconBtn('btn gear', 'Settings', ICON_GEAR);
-    // The window button sits at the right end of the horizontal strip and opens
+    // The window button can sit at either end of the horizontal strip and opens
     // a vertical tab popover for the other browser windows.
     els.winBtn = h('button', 'btn winbtn');
     els.winBtn.type = 'button';
@@ -2914,7 +2962,7 @@
       const wh = e.target.closest && e.target.closest('.whead');
       if (wh) {
         // Like vertical mode, the header itself collapses/expands this window.
-        toggleCollapse('w' + Number(wh.dataset.win));
+        toggleWinPopCollapse(Number(wh.dataset.win));
         return;
       }
       if (e.target.closest && e.target.closest('button')) return;
