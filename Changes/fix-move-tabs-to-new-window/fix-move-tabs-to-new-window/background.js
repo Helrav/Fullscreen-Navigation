@@ -7,6 +7,25 @@ async function newWindowPrefs() {
   return { fullscreen: s.newWindowFullscreen !== false, background: s.openInBackground !== false };
 }
 
+// Apply fullscreen after a window has been created. Creating it first and then
+// switching state avoids Chrome's half-fullscreen window (which can expose the
+// native bookmarks bar) on some new-window paths.
+async function ensureWindowFullscreen(windowId) {
+  const goFullscreen = async () => {
+    try {
+      await api.windows.update(windowId, { state: 'fullscreen' });
+    } catch (_) {
+      // Some browsers only allow it for a focused window.
+      try { await api.windows.update(windowId, { focused: true, state: 'fullscreen' }); } catch (_) {}
+    }
+  };
+  await goFullscreen();
+  // The window can still be settling; confirm once and retry if it did not take.
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const check = await api.windows.get(windowId).catch(() => null);
+  if (check && check.state !== 'fullscreen') await goFullscreen();
+}
+
 // Opens a window for Tab Peek: fullscreen (so the overlay can show in it) and/or
 // without taking focus, as the settings ask.
 // Fullscreen is applied as a separate step AFTER the window exists, the same as
@@ -26,19 +45,7 @@ async function createWindowFor(options, prefs, returnWindowId) {
   if (!win) throw lastError || new Error('window-create-failed');
 
   if (prefs.fullscreen && Number.isInteger(win.id)) {
-    const goFullscreen = async () => {
-      try {
-        await api.windows.update(win.id, { state: 'fullscreen' });
-      } catch (_) {
-        // Some browsers only allow it for a focused window.
-        try { await api.windows.update(win.id, { focused: true, state: 'fullscreen' }); } catch (_) {}
-      }
-    };
-    await goFullscreen();
-    // The window can still be settling; confirm once and retry if it did not take.
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    const check = await api.windows.get(win.id).catch(() => null);
-    if (check && check.state !== 'fullscreen') await goFullscreen();
+    await ensureWindowFullscreen(win.id);
   }
 
   // The user wanted to stay where they were: hand focus back to that window.
@@ -612,6 +619,57 @@ async function moveTabs(ids, target) {
   return { ok: true };
 }
 
+// Move tabs to a freshly-created window instead of adopting the first tab as
+// part of windows.create(). The placeholder tab lets Chrome enter real
+// fullscreen first; removing it after the move also prevents the New Tab page
+// from leaving Chrome's native bookmarks bar visible.
+async function moveTabsToNewWindow(ids, preferredActiveTabId) {
+  const tabs = (await Promise.all(ids.map((id) => api.tabs.get(id).catch(() => null)))).filter(Boolean);
+  if (!tabs.length) return { ok: false, reason: 'no-tabs' };
+
+  const movingIds = tabs.map((tab) => tab.id);
+  const preferred = tabs.find((tab) => tab.id === preferredActiveTabId)
+    || tabs.find((tab) => tab.active)
+    || tabs[0];
+  const prefs = await newWindowPrefs();
+
+  // Moving a tab is an explicit navigation action: the destination must stay
+  // focused even when ordinary bookmark opens are configured for background.
+  const win = await createWindowFor({}, { fullscreen: prefs.fullscreen, background: false });
+  if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
+
+  try {
+    await api.tabs.move(movingIds, { windowId: win.id, index: -1 });
+  } catch (_) {
+    // Some engines reject batch moves when the selection spans windows.
+    for (const id of movingIds) {
+      try { await api.tabs.move(id, { windowId: win.id, index: -1 }); } catch (_) {}
+    }
+  }
+
+  const destinationTabs = await api.tabs.query({ windowId: win.id }).catch(() => []);
+  const destinationIds = new Set(destinationTabs.map((tab) => tab.id));
+  const movedIds = movingIds.filter((id) => destinationIds.has(id));
+  if (!movedIds.length) {
+    await api.windows.remove(win.id).catch(() => {});
+    return { ok: false, reason: 'move-failed' };
+  }
+
+  // Remove the temporary New Tab page so it cannot become the visible tab.
+  const placeholders = destinationTabs
+    .filter((tab) => !movingIds.includes(tab.id))
+    .map((tab) => tab.id);
+  if (placeholders.length) await api.tabs.remove(placeholders).catch(() => {});
+
+  // Re-assert fullscreen after adopting tabs, then explicitly activate the
+  // tab that was active in the source context and focus the destination window.
+  if (prefs.fullscreen) await ensureWindowFullscreen(win.id);
+  const activeId = movedIds.includes(preferred.id) ? preferred.id : movedIds[0];
+  await api.tabs.update(activeId, { active: true }).catch(() => {});
+  await api.windows.update(win.id, { focused: true }).catch(() => {});
+  return { ok: true, windowId: win.id };
+}
+
 async function handle(message, sender) {
   const senderTab = sender && sender.tab;
   const windowId = senderTab && senderTab.windowId;
@@ -719,12 +777,8 @@ async function handle(message, sender) {
           }
           break;
         }
-        case 'newWindow': {
-          const win = await createWindowFor({ tabId: ids[0] }, await newWindowPrefs(), windowId);
-          const rest = ids.slice(1);
-          if (rest.length && win && Number.isInteger(win.id)) await api.tabs.move(rest, { windowId: win.id, index: -1 });
-          break;
-        }
+        case 'newWindow':
+          return moveTabsToNewWindow(ids, senderTab && senderTab.id);
         case 'bookmark':
           return bookmarkTabs(ids, { parentId: message.parentId, title: message.title, folderName: message.folderName });
         case 'ungroup':

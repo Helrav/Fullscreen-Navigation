@@ -1,1 +1,7 @@
-Workspace rename before fixing tab-to-new-window behavior.
+Fix: preserve the active tab and fullscreen appearance when moving tabs to a new window
+
+- Rename the existing workspace to Changes/fix-move-tabs-to-new-window/fix-move-tabs-to-new-window/ before changing behavior.
+- Change the “Move tab(s) to new window” action to create a fresh window first, move the selected existing tabs into it, and remove the temporary New Tab page.
+- Preserve the tab from the invoking context when selected (otherwise prefer a selected active tab), explicitly activate it, and focus the destination window rather than returning focus to the source.
+- Re-assert fullscreen after tab movement so Chrome's native bookmarks bar does not remain visible on the temporary New Tab page or in a half-fullscreen destination.
+- Keep ordinary bookmark-open background/focus preferences unchanged.
