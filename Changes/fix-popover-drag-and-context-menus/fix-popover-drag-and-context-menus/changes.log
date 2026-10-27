@@ -1,7 +1,11 @@
-Fix Other windows popover drag visibility and context menus
+Fix Other windows popover drag visibility and context menus; support bookmark dragging inside folders
 
 - Close the Other windows popover once the overlay drag actually starts, for both docked-rail and floating-window moves. A click without movement does not dismiss it.
 - Right-clicking blank space in the popover now offers New tab, New window, and the standard reopen-last-closed action instead of the popover-position menu.
 - Right-clicking a popover window header/icon now opens the same window context menu as vertical mode. Its Collapse/Expand item reads and updates that popover window's own collapse state.
+- Bookmark entries and folders in root folder popovers and recursively opened submenus now carry the same drag metadata as root bookmark items.
+- Folder popovers are accepted as bookmark drag/drop targets, so existing bookmark-tree reorder logic also works within folders and nested folders.
+- Folder popovers, submenus, and context menus are hidden while the overlay is being dragged.
+- Added matching drag-source and drop-position feedback to menu-based bookmark entries.
 
-Validation: content.js passes JavaScript syntax parsing; targeted source checks confirm all three context-menu paths and both drag paths are wired. No live Chrome UI test was run.
+Validation: edited JavaScript files pass syntax parsing; targeted source checks confirm nested bookmark metadata and folder-menu drop handling. No live Chrome UI test was run.
