@@ -1,5 +1,9 @@
 :root{--bg:#f6f6f4;--card:#fff;--fg:#1c1f23;--muted:#69707a;--line:#e3e4e1;--accent:#2f6fed}
-@media (prefers-color-scheme:dark){:root{--bg:#16181c;--card:#1f2227;--fg:#e8eaed;--muted:#9aa1ab;--line:#2c3037;--accent:#6ea0ff}}
+:root[data-theme=light]{--bg:#f6f6f4;--card:#fff;--fg:#1c1f23;--muted:#69707a;--line:#e3e4e1}
+:root[data-theme=dark]{--bg:#16181c;--card:#1f2227;--fg:#e8eaed;--muted:#9aa1ab;--line:#2c3037}
+@media (prefers-color-scheme:dark){
+  :root[data-theme=auto],:root:not([data-theme]){--bg:#16181c;--card:#1f2227;--fg:#e8eaed;--muted:#9aa1ab;--line:#2c3037}
+}
 *{box-sizing:border-box}
 
 /* Minimal scrollbars: invisible track and a wider thumb on hover. */
