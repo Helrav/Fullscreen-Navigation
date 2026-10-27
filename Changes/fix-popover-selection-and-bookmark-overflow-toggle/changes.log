@@ -1,0 +1,7 @@
+Fix popover tab selection and bookmark overflow-menu toggling
+
+Scope:
+- Make background-window tab selection in the Other windows popover retain selected tabs when the main horizontal strip rerenders, so Ctrl-click and Shift-click can behave like vertical-mode selection.
+- Make the horizontal bookmark overflow (») popup toggle closed when the same button is clicked again.
+
+Validation: workspace relocation only; source changes follow.
