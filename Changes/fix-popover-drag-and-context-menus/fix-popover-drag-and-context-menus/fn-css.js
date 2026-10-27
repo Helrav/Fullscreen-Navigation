@@ -62,11 +62,6 @@ globalThis.FNX.CSS = `
 .panel[data-style=windowed].with-floating-bookmarks.bookmarks-bottom{border-bottom-left-radius:0;border-bottom-right-radius:0}
 .panel.moving{transition:none}
 .panel.dragging-overlay{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
-/* The menu and its nested folder popovers live beside the panel in .ui.
-   Hide them as soon as an overlay drag starts, just like the panel itself. */
-.ui:has(.panel.dragging-overlay) .menu,
-.ui:has(.panel.dragging-overlay) .submenu{visibility:hidden!important;pointer-events:none!important}
-
 /* Bookmark rows use the same drag feedback whether they are in the root bar,
    the vertical list, or a folder popover. */
 .bm-dragging{opacity:.45!important}
