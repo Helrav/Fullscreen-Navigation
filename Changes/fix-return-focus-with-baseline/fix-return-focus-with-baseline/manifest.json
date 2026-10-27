@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Tab Peek",
+  "name": "Fullscreen Navigation",
+  "short_name": "FullNav",
   "version": "0.1",
-  "description": "A customizable slide-in tab manager with multi-tab actions, bookmarks, and a floating window mode.",
+  "description": "Navigate your tabs, windows and bookmarks from the edge of the screen while your browser is in fullscreen.",
   "permissions": [
     "tabs",
     "tabGroups",
@@ -57,7 +58,7 @@
     "open_in_tab": false
   },
   "action": {
-    "default_title": "Tab Peek settings",
+    "default_title": "FullNav settings",
     "default_popup": "options.html",
     "default_icon": {
       "16": "icons/16.png",
@@ -81,7 +82,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "tab-peek@example.com",
+      "id": "fullnav@example.com",
       "strict_min_version": "121.0"
     }
   }
