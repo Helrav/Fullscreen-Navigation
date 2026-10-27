@@ -1,11 +1,1 @@
 Sync: copy the current main baseline into Test
-
-This is a file sync only. No additional feature fixes were authored during this sync.
-
-- Refresh the Test branch root project files from main commit bda97bbe4270e937805fe3ed5d600b5aed1348e8.
-- Replace the existing changes workspace with a snapshot of those same main project files.
-- Preserve the existing icon tree and binary/file blobs.
-- Remaining work (not implemented here):
-  - Improve the horizontal overlay appearance.
-  - Address Chrome's "background.scripts requires manifest version of 2 or lower" warning.
-  - Improve viewport-change behavior while the overlay is pinned.
