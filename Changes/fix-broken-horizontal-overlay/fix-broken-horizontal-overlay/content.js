@@ -17,6 +17,7 @@
   let u = 1;                   // 1 / browser zoom: keeps the overlay the same real size on every page
   let data = { cur: -1, windows: [], groups: {} };
   let flat = [];
+  let winPopFlat = [];
   let collapsed = {};
   let folderIcons = {};        // bookmark folder id -> { color, glyph, emoji }
   const selected = new Set();
@@ -27,11 +28,15 @@
   let mods = { ctrl: false, alt: false, shift: false, meta: false };
   let hostEl = null, root = null, ui = null, els = {};
   let contextMenu = null, bookmarks = null, dragIds = null, dragTarget = null;
+  let bookmarkDrag = null, bookmarkDropTarget = null;
   let dockDrag = null, hotZoneEditMode = false, tipEl = null;
   let searchPopupOpen = false;
   let keepPeekOpenAfterEscape = false;
   let lastPointer = { x: -1, y: -1 };
   let windowNames = {};
+  // Horizontal rails show the current browser window only. Other windows live
+  // in a vertical popover anchored to the right end of the strip.
+  let winPopOpen = false, winDocDown = null, winPopIcons = false, winPopPinned = false, hoverWinPop = false;
   const DEFAULT_TOOLBAR_ORDER = ['bookmarks', 'pin', 'settings'];
   let toolbarOrder = [...DEFAULT_TOOLBAR_ORDER];
   // One toolbar icon occupies the overlay's edge slot (bottom for vertical,
@@ -228,10 +233,23 @@
 
   async function loadStorage() {
     try {
-      const r = await api.storage.local.get(['settings', 'pinned', 'dockedPinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId', 'bmFolderIcons']);
+      const r = await api.storage.local.get(['settings', 'pinned', 'dockedPinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId', 'bmFolderIcons', 'railStripV2', 'winPopPinned']);
       settings = fnNormalize(r.settings);
       folderIcons = r.bmFolderIcons && typeof r.bmFolderIcons === 'object' ? r.bmFolderIcons : {};
+      // The previous rail build could save an expanded thickness (it snapped
+      // the old shelf to whole rows). The strip has no expanded state, so reset
+      // that one-time value to the smallest height. Later manual sizes stick.
+      if (!r.railStripV2) {
+        const horizontalDock = settings.style === 'docked'
+          && (settings.edge === 'top' || settings.edge === 'bottom');
+        if (horizontalDock && settings.barHeight !== 40) {
+          settings.barHeight = 40;
+          try { api.storage.local.set({ settings }); } catch (_) {}
+        }
+        try { api.storage.local.set({ railStripV2: true }); } catch (_) {}
+      }
       pinned = !!r.pinned;
+      winPopPinned = !!r.winPopPinned;
       // Legacy floating mode always forced pinned=true, so only infer from the
       // live pin when the saved layout is docked and no previous docked state exists.
       dockedPinned = typeof r.dockedPinned === 'boolean'
@@ -552,7 +570,7 @@
     if (closeTimer) return;
     closeTimer = setTimeout(() => {
       closeTimer = 0;
-      if (keepPeekOpenAfterEscape || hoverPanel || lastInZone || nearResizeTarget() || nearPanelEdge() || pinned || resizing || hotZoneEditMode || dragIds || (els.panel && els.panel.classList.contains('dragging-overlay')) || hasBlockingPopup() || (contextMenu && contextMenu.isOpen()) || (bookmarks && bookmarks.hasOpenFolders && bookmarks.hasOpenFolders()) || (bookmarks && bookmarks.isPlacementDragging && bookmarks.isPlacementDragging())) return;
+      if (keepPeekOpenAfterEscape || hoverPanel || hoverWinPop || lastInZone || nearResizeTarget() || nearPanelEdge() || pinned || resizing || hotZoneEditMode || dragIds || bookmarkDrag || (winPopOpen && (!winPopPinned || hoverWinPop)) || (els.panel && els.panel.classList.contains('dragging-overlay')) || hasBlockingPopup() || (contextMenu && contextMenu.isOpen()) || (bookmarks && bookmarks.hasOpenFolders && bookmarks.hasOpenFolders()) || (bookmarks && bookmarks.isPlacementDragging && bookmarks.isPlacementDragging())) return;
       if (root && root.activeElement === els.search) return;
       if (isBox()) return;
       closePeek();
@@ -567,6 +585,7 @@
 
   function closePeek() {
     keepPeekOpenAfterEscape = false;
+    if (winPopOpen) closeWinPop();
     if (searchPopupOpen) closeSearchPopup(false);
     hotZoneEditMode = false;
     updateHintVisibility();
@@ -596,6 +615,17 @@
 
   function onKey(e) {
     if (dead) return;
+    if (winPopOpen && e.type === 'keydown' && e.key === 'Escape'
+      && !renamePrompt && !settingsCard
+      && !(contextMenu && contextMenu.isOpen())) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      // Escape is an explicit dismissal: stop the popover from following the
+      // overlay instead of letting the next refresh immediately reopen it.
+      if (winPopPinned) setWinPopPinned(false);
+      closeWinPop();
+      return;
+    }
     const active = root && root.activeElement;
     const searchFocused = !!(active && active === els.search);
     const renameFocused = !!(renamePrompt && active === renamePrompt.input);
@@ -737,20 +767,21 @@
     if (selected.has(t.id)) cls.push('selected');
     if (t.discarded) cls.push('dim');
     const d = h('div', cls.join(' '));
-    d.appendChild(h('span', 'tab-surface'));
     d.dataset.id = String(t.id);
     d.draggable = true;
     d.dataset.title = t.title || 'Untitled tab';
     d.dataset.url = t.url || '';
     const fav = h('span', 'fav');
     fillFav(fav, t);
-    d.append(fav, h('span', 'title', t.title));
-    if (t.audible || t.muted) d.appendChild(h('span', 'badge', t.muted ? '🔇' : '🔊'));
-    if (t.pinned) d.appendChild(h('span', 'badge', '📌'));
+    const body = h('div', 'tabbody');
+    body.append(fav, h('span', 'title', t.title));
+    if (t.audible || t.muted) body.appendChild(h('span', 'badge', t.muted ? '🔇' : '🔊'));
+    if (t.pinned) body.appendChild(h('span', 'badge', '📌'));
     const x = h('button', 'x', '×');
     x.type = 'button';
     x.title = 'Close tab';
-    d.appendChild(x);
+    body.appendChild(x);
+    d.appendChild(body);
     return d;
   }
 
@@ -788,39 +819,47 @@
     const frag = document.createDocumentFragment();
     flat = [];
     const alive = new Set();
-    const allWindows = data.windows || [];
-    const horizontalTabs = !isVertical() && !isBox();
-    // Horizontal strips focus on this browser window; other windows are reached
-    // through the dedicated window picker rather than being mixed into the tab row.
-    allWindows.forEach((w) => w.tabs.forEach((t) => alive.add(t.id)));
-    const currentWindow = allWindows.find((w) => w.id === data.cur);
-    const windowsToRender = horizontalTabs && currentWindow ? [currentWindow] : allWindows;
     let renderedWindows = 0;
+    // The rail can either stay compact (current browser window only) or show
+    // every window inline with its icon, tab count and divider. In compact mode,
+    // other windows remain available from the window popover; search stays global.
+    const horizontalRail = !isBox() && !isVertical();
+    let currentOnly = horizontalRail && !filtering && settings.horizontalWindows !== 'all';
+    let windows = data.windows || [];
+    if (currentOnly) {
+      const cur = windows.filter((w) => w.id === data.cur);
+      if (cur.length) windows = cur;
+      else currentOnly = false;
+    }
+    const showWindowHeader = !currentOnly;
 
-    windowsToRender.forEach((w) => {
+    windows.forEach((w) => {
+      w.tabs.forEach((t) => alive.add(t.id));
       const list = filtering ? w.tabs.filter(matches) : w.tabs;
       if (filtering && !list.length) return;
       const isCur = w.id === data.cur;
-      const wClosed = !filtering && !!collapsed[collapseKey('w' + w.id)];
+      const wClosed = showWindowHeader && !filtering && !!collapsed[collapseKey('w' + w.id)];
 
       // A deliberately short divider separates each visible window section.
       // It is a real flex item so it also works when horizontal layouts flatten
       // window wrappers with display: contents.
-      if (renderedWindows > 0) frag.appendChild(h('div', 'windivider'));
+      if (showWindowHeader && renderedWindows > 0) frag.appendChild(h('div', 'windivider'));
       renderedWindows++;
 
       const win = h('div', 'win' + (isCur ? '' : ' inactive-window'));
       win.dataset.win = String(w.id);
-      const wh = h('div', 'whead' + (wClosed ? ' closed' : '') + (isCur ? ' cur' : ''));
-      const windowName = String(w.name || '').trim();
-      wh.dataset.win = String(w.id);
-      wh.dataset.title = windowName;
-      wh.dataset.detail = (w.tabs.length + ' tabs');
-      wh.title = windowName ? ((wClosed ? 'Expand' : 'Collapse') + ' window: ' + windowName) : (wClosed ? 'Expand tabs' : 'Collapse tabs');
-      wh.appendChild(windowIcon());
-      if (windowName) wh.appendChild(h('span', 'wlabel', windowName));
-      wh.appendChild(h('span', 'wcount', w.tabs.length + ' Tabs'));
-      win.appendChild(wh);
+      if (showWindowHeader) {
+        const wh = h('div', 'whead' + (wClosed ? ' closed' : '') + (isCur ? ' cur' : ''));
+        const windowName = String(w.name || '').trim();
+        wh.dataset.win = String(w.id);
+        wh.dataset.title = windowName;
+        wh.dataset.detail = (w.tabs.length + ' tabs');
+        wh.title = windowName ? ((wClosed ? 'Expand' : 'Collapse') + ' window: ' + windowName) : (wClosed ? 'Expand tabs' : 'Collapse tabs');
+        wh.appendChild(windowIcon());
+        if (windowName) wh.appendChild(h('span', 'wlabel', windowName));
+        wh.appendChild(h('span', 'wcount', w.tabs.length + ' Tabs'));
+        win.appendChild(wh);
+      }
 
       if (!wClosed) {
         const body = h('div', 'wbody');
@@ -864,19 +903,14 @@
     });
 
     for (const id of [...selected]) if (!alive.has(id)) selected.delete(id);
-    if (selId == null || !flat.some((f) => f.id === selId)) {
+    const visibleNow = new Set(flat.map((f) => f.id));
+    if (winPopOpen) for (const id of winPopFlat) visibleNow.add(id);
+    if (selId == null || !visibleNow.has(selId)) {
       const pick = filtering ? flat[0] : (flat.find((f) => f.active) || flat[0]);
       selId = pick ? pick.id : null;
     }
     if (!frag.childNodes.length) {
       frag.appendChild(h('div', 'empty', data.windows.length ? 'No matching tabs' : 'Loading tabs…'));
-    }
-
-    if (els.windowsBtn) {
-      const otherWindowCount = allWindows.filter((w) => w.id !== data.cur).length;
-      els.windowsBtn.hidden = !horizontalTabs || otherWindowCount === 0;
-      els.windowsBtn.title = otherWindowCount ? `Switch windows (${otherWindowCount})` : 'No other windows';
-      els.windowsBtn.setAttribute('aria-label', els.windowsBtn.title);
     }
 
     const st = els.list.scrollTop, sl = els.list.scrollLeft;
@@ -891,9 +925,312 @@
       }
       scrollSel = false;
     }
+    syncWinButton();
+    updateRailDensity();
+    if (winPopOpen) {
+      renderWinPop();
+      positionWinPop();
+      if (bookmarks) bookmarks.update();
+    }
   }
 
-  function visibleIndex(id) { return flat.findIndex((entry) => entry.id === id); }
+  // Chrome-like density for the horizontal strip. Tabs all shrink to the same
+  // width, so a single class on the list is enough: drop the close button
+  // first, then the titles when only the favicon fits. Computing this once per
+  // render/resize is much cheaper than a container query on every tab.
+  function updateRailDensity() {
+    const list = els.list;
+    if (!list) return;
+    if (isBox() || isVertical()) {
+      list.classList.remove('tight', 'dense');
+      updateScrollButtons();
+      return;
+    }
+    const first = list.querySelector('.tab');
+    const width = first ? first.getBoundingClientRect().width : 0;
+    if (width) {
+      list.classList.toggle('tight', width < 148);
+      list.classList.toggle('dense', width < 72);
+    }
+    updateScrollButtons();
+  }
+
+  // Small paging buttons for an overflowing strip. They stay out of the way
+  // (and out of the layout) while every tab fits.
+  function updateScrollButtons() {
+    const prev = els.scrollPrev, next = els.scrollNext, list = els.list;
+    if (!prev || !next || !list) return;
+    if (isBox() || isVertical()) {
+      prev.hidden = true;
+      next.hidden = true;
+      return;
+    }
+    // Measure the width the tabs would have without the buttons, so showing
+    // them cannot feed back into its own overflow test.
+    const navW = (prev.hidden ? 0 : prev.getBoundingClientRect().width + 4)
+      + (next.hidden ? 0 : next.getBoundingClientRect().width + 4);
+    const fits = list.scrollWidth <= list.clientWidth + navW + 1;
+    prev.hidden = fits;
+    next.hidden = fits;
+    if (fits) return;
+    const max = Math.max(0, list.scrollWidth - list.clientWidth);
+    prev.disabled = list.scrollLeft <= 1;
+    next.disabled = list.scrollLeft >= max - 1;
+  }
+
+  function scrollRail(dir) {
+    const list = els.list;
+    if (!list) return;
+    const step = Math.max(140, Math.round(list.clientWidth * 0.8));
+    // Keep this instant: smooth scrolling is disabled in some tab states and
+    // the paging buttons should always respond on the first press.
+    list.scrollBy({ left: dir * step, behavior: 'auto' });
+    updateScrollButtons();
+  }
+
+  // Reflect window availability on the strip's window button.
+  function syncWinButton() {
+    const btn = els.winBtn;
+    if (!btn) return;
+    const wins = data.windows || [];
+    const others = wins.filter((w) => w.id !== data.cur).length;
+    const show = !isBox() && !isVertical()
+      && settings.horizontalWindows !== 'all'
+      && others > 0;
+    btn.hidden = !show;
+    if (!show) {
+      if (winPopOpen) closeWinPop();
+      return;
+    }
+    const label = others === 1 ? 'Other windows (1)' : ('Other windows (' + others + ')');
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-expanded', String(winPopOpen));
+    schedulePinnedWinPop();
+  }
+
+  function winPopSide() { return settings.edge === 'bottom' ? 'bottom' : 'top'; }
+  function winPopAlign() { return settings.winPopAlign === 'left' ? 'left' : 'right'; }
+
+  function setWinPopAlign(align) {
+    settings.winPopAlign = align === 'left' ? 'left' : 'right';
+    saveSettings();
+    if (winPopOpen) {
+      positionWinPop();
+      if (bookmarks) bookmarks.update();
+    }
+  }
+
+  function toggleWinPopAlign() {
+    setWinPopAlign(winPopAlign() === 'left' ? 'right' : 'left');
+  }
+
+  function setWinPopIcons(on) {
+    winPopIcons = !!on;
+    if (!els.winPop) return;
+    els.winPop.classList.toggle('icons', winPopIcons);
+    if (els.winPopIcons) {
+      const path = els.winPopIcons.querySelector('path');
+      if (path) path.setAttribute('d', winPopIcons ? ICON_OVERLAY_EXPAND : ICON_OVERLAY_COLLAPSE);
+      const label = winPopIcons ? 'Show tab names' : 'Show icons only';
+      els.winPopIcons.title = label;
+      els.winPopIcons.setAttribute('aria-label', label);
+      els.winPopIcons.setAttribute('aria-pressed', String(winPopIcons));
+    }
+    if (winPopOpen) {
+      positionWinPop();
+      if (bookmarks) bookmarks.update();
+    }
+  }
+
+  function syncWinPopPin() {
+    if (!els.winPopPin) return;
+    const label = winPopPinned ? 'Unpin window list' : 'Pin window list with overlay';
+    els.winPopPin.setAttribute('aria-pressed', String(winPopPinned));
+    els.winPopPin.title = label;
+    els.winPopPin.setAttribute('aria-label', label);
+  }
+
+  function canAutoOpenWinPop() {
+    return !!(winPopPinned && shown && !winPopOpen
+      && !isBox() && !isVertical()
+      && settings.horizontalWindows !== 'all'
+      && !hasBlockingPopup() && !searchPopupOpen
+      && !(contextMenu && contextMenu.isOpen()));
+  }
+
+  function schedulePinnedWinPop() {
+    if (!canAutoOpenWinPop()) return;
+    requestAnimationFrame(() => {
+      if (canAutoOpenWinPop()) openWinPop();
+    });
+  }
+
+  function setWinPopPinned(v, persist = true) {
+    winPopPinned = !!v;
+    syncWinPopPin();
+    if (winPopPinned) schedulePinnedWinPop();
+    if (persist) {
+      try { api.storage.local.set({ winPopPinned }); } catch (_) {}
+    }
+  }
+
+  // The popover is a vertical tab strip for the other browser windows. It hangs
+  // from the rail (down for a top rail, up for a bottom rail) and is only as
+  // tall as its tabs, up to the viewport edge.
+  function renderWinPop() {
+    if (!els.winPopBody) return;
+    const scroll = els.winPopBody.scrollTop;
+    const wins = data.windows || [];
+    const others = wins.filter((w) => w.id !== data.cur);
+    const frag = document.createDocumentFragment();
+    winPopFlat = [];
+    others.forEach((w, index) => {
+      const closed = !!collapsed[collapseKey('w' + w.id)];
+      const win = h('div', 'win inactive-window' + (closed ? ' closed' : ''));
+      win.dataset.win = String(w.id);
+      const wh = h('div', 'whead' + (closed ? ' closed' : ''));
+      wh.dataset.win = String(w.id);
+      wh.title = closed ? 'Expand tabs' : 'Collapse tabs';
+      wh.setAttribute('aria-expanded', String(!closed));
+      // Match vertical mode: the header is the collapse control and shows only
+      // the window icon and tab count. Window names are intentionally omitted.
+      wh.append(windowIcon(), h('span', 'wcount', w.tabs.length + ' Tabs'));
+      const wb = h('div', 'wbody');
+      for (const t of w.tabs || []) {
+        // Background-window active tabs must not get the current-tab marker.
+        const el = tabEl(t, false);
+        el.title = t.title || 'Untitled tab';
+        wb.appendChild(el);
+        if (!closed) winPopFlat.push(t.id);
+      }
+      win.appendChild(wh);
+      if (!closed) win.appendChild(wb);
+      frag.appendChild(win);
+      if (index < others.length - 1) frag.appendChild(h('div', 'windivider'));
+    });
+    if (!others.length) frag.appendChild(h('div', 'empty', 'No other windows'));
+    els.winPopBody.replaceChildren(frag);
+    els.winPopBody.scrollTop = scroll;
+  }
+
+  function positionWinPop() {
+    if (!winPopOpen || !els.winPop || !els.panel) return;
+    const side = winPopSide();
+    const align = winPopAlign();
+    const pr = els.panel.getBoundingClientRect();
+    const vpw = document.documentElement.clientWidth || window.innerWidth;
+    const vph = document.documentElement.clientHeight || window.innerHeight;
+    const uu = u || 1;
+    const room = Math.max(180, vpw / uu - 16);
+    const wanted = winPopIcons
+      ? 52
+      : Math.min(340, Math.max(250, Number(settings.panelWidth) || 300));
+    // The bookmark bar now yields sideways, so the popover only needs a small
+    // viewport margin instead of a vertical reserve.
+    const reserve = 8;
+    els.winPop.dataset.side = side;
+    els.winPop.dataset.align = align;
+    els.winPop.style.width = Math.round(Math.min(room, wanted)) + 'px';
+    if (align === 'left') {
+      // The popover can sit at either end of a horizontal strip. Keeping it
+      // flush with the rail's left edge lets the bar start at its right edge.
+      els.winPop.style.left = Math.max(0, pr.left / uu) + 'px';
+      els.winPop.style.right = 'auto';
+    } else {
+      els.winPop.style.right = Math.max(0, (vpw - pr.right) / uu) + 'px';
+      els.winPop.style.left = 'auto';
+    }
+    if (side === 'top') {
+      els.winPop.style.top = Math.max(0, pr.bottom / uu) + 'px';
+      els.winPop.style.bottom = 'auto';
+      els.winPop.style.maxHeight = Math.max(140, (vph - pr.bottom) / uu - reserve) + 'px';
+    } else {
+      els.winPop.style.top = 'auto';
+      els.winPop.style.bottom = Math.max(0, (vph - pr.top) / uu) + 'px';
+      els.winPop.style.maxHeight = Math.max(140, pr.top / uu - reserve) + 'px';
+    }
+    // Overflow is only needed when the viewport cap really bites.
+    els.winPop.classList.remove('scrolling');
+    const body = els.winPopBody;
+    if (body && body.scrollHeight - body.clientHeight > 6) els.winPop.classList.add('scrolling');
+  }
+
+  function openWinPop() {
+    if (winPopOpen || !els.winPop || !els.winBtn || els.winBtn.hidden
+      || isBox() || isVertical() || settings.horizontalWindows === 'all') return;
+    if (!(data.windows || []).some((w) => w.id !== data.cur)) return;
+    winPopOpen = true;
+    hoverWinPop = els.winPop.matches(':hover');
+    clearClose();
+    syncWinPopPin();
+    renderWinPop();
+    els.winPop.classList.remove('hidden');
+    positionWinPop();
+    els.winBtn.classList.add('on');
+    els.winBtn.setAttribute('aria-expanded', 'true');
+    // Closed shadow roots retarget internal pointerdowns to the host by the
+    // time they reach the document, so the real inside/outside decision is
+    // made by a listener on the shadow root (installed in build()).
+    winDocDown = (e) => {
+      if (winPopPinned || e.target === root.host) return;
+      closeWinPop();
+    };
+    document.addEventListener('pointerdown', winDocDown, true);
+    if (bookmarks) bookmarks.update();
+  }
+
+  function closeWinPop() {
+    if (!winPopOpen) return;
+    winPopOpen = false;
+    hoverWinPop = false;
+    if (winDocDown) {
+      document.removeEventListener('pointerdown', winDocDown, true);
+      winDocDown = null;
+    }
+    if (els.winPop) els.winPop.classList.add('hidden');
+    if (els.winBtn) {
+      els.winBtn.classList.remove('on');
+      els.winBtn.setAttribute('aria-expanded', 'false');
+    }
+    // The pointer may have been held in the overlay by the popover itself.
+    if (hoverPanel && els.panel) hoverPanel = els.panel.matches(':hover');
+    if (bookmarks) bookmarks.update();
+    if (peek && !pinned && !isBox()) scheduleClose();
+  }
+
+  function toggleWinPop() {
+    if (winPopOpen) {
+      // The rail button is also the quick way to stop following the overlay.
+      if (winPopPinned) setWinPopPinned(false);
+      closeWinPop();
+      return;
+    }
+    openWinPop();
+  }
+
+  // The bookmark bar gives way sideways while the popover is open. The popover
+  // consumes the same width from the bar on either side; when it is on the
+  // left the bar simply starts after it.
+  function winPopBookmarkInset() {
+    if (!winPopOpen || !els.winPop) return 0;
+    return Math.max(0, els.winPop.getBoundingClientRect().width / (u || 1));
+  }
+
+  function winPopBookmarkStart() {
+    if (!winPopOpen || !els.winPop || !els.panel || winPopAlign() !== 'left') return 0;
+    return Math.max(0, (els.winPop.getBoundingClientRect().left - els.panel.getBoundingClientRect().left) / (u || 1));
+  }
+
+  function visibleIds() {
+    const ids = flat.map((entry) => entry.id);
+    // The popover is a second vertical list. Treat it as a continuation of the
+    // main list for Shift ranges and cross-window selection.
+    if (winPopOpen) ids.push(...winPopFlat);
+    return ids;
+  }
+
+  function visibleIndex(id) { return visibleIds().indexOf(id); }
 
   function orderedIds(ids) {
     const wanted = new Set(ids);
@@ -912,8 +1249,9 @@
     const a = visibleIndex(anchorId);
     if (shift && i >= 0 && a >= 0) {
       const lo = Math.min(i, a), hi = Math.max(i, a);
+      const ids = visibleIds();
       if (!additive) selected.clear();
-      for (let k = lo; k <= hi; k++) selected.add(flat[k].id);
+      for (let k = lo; k <= hi; k++) selected.add(ids[k]);
     } else if (shift) {
       // If the anchor is hidden (for example by a collapsed group), keep the
       // existing selection and add the target rather than toggling it off.
@@ -1138,14 +1476,31 @@
   async function showOverlayMenu(windowId, x, y) {
     if (!contextMenu) return;
     const reopen = await getReopenMenuItem();
-    contextMenu.showContext([
+    // In "Current window only" there is no window header to right-click, so the
+    // strip's own menu is the place to name the current browser window.
+    const compactHorizontal = !isBox() && !isVertical()
+      && settings.horizontalWindows !== 'all';
+    const current = compactHorizontal
+      ? (data.windows || []).find((win) => win.id === (Number.isInteger(windowId) ? windowId : data.cur))
+      : null;
+    const items = [
       { label: 'New tab', shortcut: 'Ctrl+T', action: () => send({ type: 'newTab', windowId }) },
       { label: 'New window', shortcut: 'Ctrl+N', action: () => send({ type: 'newWindow' }) },
-      reopen,
+      reopen
+    ];
+    if (current) {
+      items.push({ sep: true });
+      items.push({
+        label: 'Name this window…',
+        action: () => promptText('Name window', current.name || '', (name) => send({ type: 'renameWindow', windowId: current.id, name }))
+      });
+    }
+    items.push(
       { sep: true },
       { label: settings.bookmarks ? 'Hide bookmark bar' : 'Show bookmark bar', action: toggleBookmarkPanel },
       { label: 'Settings', action: () => openSettingsCard() }
-    ], x, y);
+    );
+    contextMenu.showContext(items, x, y);
   }
 
   async function showWindowMenu(windowId, x, y) {
@@ -1162,34 +1517,6 @@
       { sep: true },
       { label: 'Close', shortcut: 'Alt+F4', danger: true, action: () => send({ type: 'closeWindow', windowId }) }
     ], x, y);
-  }
-
-  function showWindowPicker() {
-    if (!contextMenu || !els.windowsBtn) return;
-    const wins = data.windows || [];
-    const current = wins.find((w) => w.id === data.cur);
-    const others = wins.filter((w) => w.id !== data.cur);
-    const items = [];
-    if (current) items.push({ label: `Current window · ${current.tabs.length} tabs`, disabled: true });
-    if (others.length) {
-      if (items.length) items.push({ sep: true });
-      for (const win of others) {
-        const index = wins.findIndex((w) => w.id === win.id) + 1;
-        const name = String(win.name || '').trim() || `Window ${index}`;
-        const tabCount = win.tabs.length;
-        const activeTab = win.tabs.find((tab) => tab.active) || win.tabs[0];
-        items.push({
-          label: `${name} · ${tabCount} tab${tabCount === 1 ? '' : 's'}`,
-          disabled: !activeTab,
-          action: () => { if (activeTab) send({ type: 'activate', tabId: activeTab.id }); }
-        });
-      }
-    } else {
-      items.push({ label: 'No other windows', disabled: true });
-    }
-    const rect = els.windowsBtn.getBoundingClientRect();
-    const above = settings.edge === 'bottom';
-    contextMenu.showContext(items, rect.left, above ? rect.top : rect.bottom, above ? 'above' : 'below');
   }
 
   async function closeTabs(ids) {
@@ -1246,6 +1573,7 @@
   let renamePrompt = null;
   function openSettingsCard() {
     if (settingsCard) return;
+    if (winPopOpen) closeWinPop();
     clearClose();
     // Avoid stacking the live editor's page shield behind the settings modal.
     hotZoneEditMode = false;
@@ -1288,6 +1616,7 @@
     settingsCard = null;
     updateResizeBuffer();
     if (peek && !pinned && !isBox()) scheduleClose();
+    schedulePinnedWinPop();
   }
 
   function closePrompt() {
@@ -1844,10 +2173,12 @@
     els.searchWrap.style.width = '';
     if (els.searchWrap.parentNode !== els.searchRow) els.searchRow.appendChild(els.searchWrap);
     if (focusToggle && els.searchToggle) els.searchToggle.focus();
+    schedulePinnedWinPop();
   }
 
   function openSearchPopup() {
     if (!settings.showSearch || !els.searchWrap || !ui) return;
+    if (winPopOpen) closeWinPop();
     searchPopupOpen = true;
     els.searchWrap.classList.add('search-popup');
     ui.appendChild(els.searchWrap);
@@ -1904,18 +2235,21 @@
     const compact = currentWidthUnits() < COMPACT_BELOW;
     panel.classList.toggle('compact', compact);
     panel.classList.toggle('icons', compact || !s.showNames);
+    syncWinButton();
+    updateRailDensity();
+    if (winPopOpen) positionWinPop();
     const sizeBadge = els.sizeBadge;
     if (sizeBadge && isBox()) sizeBadge.textContent = Math.round((settings.winRect?.w || 0)) + ' × ' + Math.round((settings.winRect?.h || 0));
     updateSearchLayout();
     updateResizeBuffer();
   }
 
-  // Collapse is a size state, not a separate mode. This also recognizes a
-  // manually resized overlay at its narrow edge size.
+  // Collapse is a size state, not a separate mode. Horizontal rails are a
+  // fixed strip with no expand/collapse state.
   function isOverlayCollapsed() {
     if (isBox()) return (settings.winRect?.w ?? settings.panelWidth ?? 360) <= 60;
     if (isVertical()) return Number(settings.panelWidth) <= 60;
-    return Number(settings.barHeight) <= 48;
+    return false;
   }
 
   function syncOverlayToggle() {
@@ -1931,19 +2265,16 @@
   }
 
   function syncOverlayCollapsedState() {
-    if (els.panel) {
-      els.panel.classList.toggle('overlay-collapsed', isOverlayCollapsed());
-      // The default 56px bar stays a compact strip. Only a deliberately taller
-      // horizontal bar switches to the multrow layout.
-      els.panel.classList.toggle('horizontal-expanded', !isVertical() && !isBox() && Number(settings.barHeight) >= 72);
-    }
+    if (els.panel) els.panel.classList.toggle('overlay-collapsed', isOverlayCollapsed());
     syncOverlayToggle();
   }
 
   function toggleOverlayCollapsed() {
+    // Horizontal rails have no expanded state; the height slider and the edge
+    // resize grip still control the strip thickness.
+    if (!isBox() && !isVertical()) return;
     const collapsed = isOverlayCollapsed();
     const viewportWidth = vw() / u;
-    const viewportHeight = vh() / u;
 
     if (isBox()) {
       const rect = ensureWindowRect();
@@ -1971,10 +2302,6 @@
       settings.panelWidth = collapsed
         ? fnClamp(Math.round(viewportWidth * 0.15), 52, 800)
         : 52;
-    } else {
-      settings.barHeight = collapsed
-        ? fnClamp(Math.round(viewportHeight * 0.15), 40, 400)
-        : 40;
     }
 
     saveSettings();
@@ -1995,6 +2322,7 @@
     if (vis && !shown) { needCenter = true; measure(); placeHint(); }
     shown = vis;
     els.panel.classList.toggle('hidden', !vis);
+    if ((!vis || isBox() || isVertical() || settings.horizontalWindows === 'all') && winPopOpen) closeWinPop();
     syncOverlayCollapsedState();
     const bookmarkEdge = settings.floatingBookmarksEdge || 'auto';
     const windowedSideBookmarks = isBox() && !['top', 'bottom'].includes(bookmarkEdge);
@@ -2009,6 +2337,7 @@
     if (ui) ui.dataset.theme = settings.theme;
     els.pin.setAttribute('aria-pressed', String(pinned));
     els.pin.title = pinned ? 'Unpin' : 'Pin open (stays visible when you switch tabs)';
+    syncWinPopPin();
     if (els.bookmarkBtn) els.bookmarkBtn.setAttribute('aria-pressed', String(!!settings.bookmarks));
     updateHintVisibility();
 
@@ -2023,6 +2352,7 @@
         bookmarks.el.classList.add('pending-place');
       }
     }
+    if (vis) schedulePinnedWinPop();
     syncPush(!instant);
   }
 
@@ -2346,7 +2676,7 @@
         if (hostEl) hostEl.classList.remove('overlay-pointer-hover');
       }
     });
-    const internalScrollers = '.list, .bmlist, .bmstrip, .menu.scroll, .submenu.scroll';
+    const internalScrollers = '.list, .winpopbody, .bmlist, .bmstrip, .menu.scroll, .submenu.scroll';
     ui.addEventListener('wheel', (e) => {
       const target = e.target instanceof Element ? e.target : null;
       const scroller = target && target.closest(internalScrollers);
@@ -2362,6 +2692,7 @@
         }
         if (dx) scroller.scrollLeft += dx;
         if (dy) scroller.scrollTop += dy;
+        if (scroller === els.list && !isVertical() && !isBox()) updateScrollButtons();
       }
       // Always consume wheel input over FullNav, even on blank/non-scrollable
       // surfaces or at a scroll boundary, so the website underneath never moves.
@@ -2408,14 +2739,7 @@
       e.stopPropagation();
       clearSearchInput(true);
     });
-    els.windowsBtn = h('button', 'btn windowsbtn');
-    els.windowsBtn.type = 'button';
-    els.windowsBtn.title = 'Switch windows';
-    els.windowsBtn.setAttribute('aria-label', 'Switch windows');
-    els.windowsBtn.appendChild(windowIcon());
-    els.windowsBtn.hidden = true;
-    els.windowsBtn.addEventListener('click', () => showWindowPicker());
-    els.searchRow.append(els.overlayToggle, els.searchToggle, els.windowsBtn, els.searchWrap);
+    els.searchRow.append(els.overlayToggle, els.searchToggle, els.searchWrap);
     els.searchToggle.addEventListener('click', () => {
       if (searchPopupOpen) closeSearchPopup(true);
       else openSearchPopup();
@@ -2423,6 +2747,33 @@
     els.bookmarkBtn = iconBtn('btn bookmarkbtn', 'Show bookmarks', 'M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z');
     els.pin = iconBtn('btn pin', 'Pin open', ICON_PIN);
     els.gear = iconBtn('btn gear', 'Settings', ICON_GEAR);
+    // The window button sits at the right end of the horizontal strip and opens
+    // a vertical tab popover for the other browser windows.
+    els.winBtn = h('button', 'btn winbtn');
+    els.winBtn.type = 'button';
+    els.winBtn.hidden = true;
+    els.winBtn.title = 'Other windows';
+    els.winBtn.setAttribute('aria-label', 'Other windows');
+    els.winBtn.setAttribute('aria-haspopup', 'true');
+    els.winBtn.setAttribute('aria-expanded', 'false');
+    els.winBtn.appendChild(windowIcon());
+    els.winBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleWinPop();
+    });
+    els.winBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+    els.winBtn.addEventListener('contextmenu', (e) => {
+      if (!contextMenu) return;
+      e.preventDefault();
+      const left = winPopAlign() === 'left';
+      contextMenu.showContext([
+        {
+          label: left ? 'Position other windows to the right' : 'Position other windows to the left',
+          action: toggleWinPopAlign
+        }
+      ], e.clientX, e.clientY);
+    });
     els.edgeTools = h('div', 'edge-tools');
     applyToolbarOrder();
     setupToolbarReordering();
@@ -2430,8 +2781,28 @@
     // Click-and-hold any non-interactive part of the top bar to move the overlay.
     top.addEventListener('pointerdown', startOverlayDrag);
 
+    const railNav = (cls, label, dir) => {
+      const b = h('button', 'btn stripnav ' + cls);
+      b.type = 'button';
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      b.appendChild(chev());
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        scrollRail(dir);
+      });
+      b.addEventListener('pointerdown', (e) => e.stopPropagation());
+      return b;
+    };
+    els.scrollPrev = railNav('stripnav-prev', 'Scroll tabs left', -1);
+    els.scrollNext = railNav('stripnav-next', 'Scroll tabs right', 1);
+    els.scrollPrev.hidden = true;
+    els.scrollNext.hidden = true;
+
     els.list = h('div', 'list');
-    els.panel.append(top, els.list, els.edgeTools);
+    els.list.addEventListener('scroll', updateScrollButtons, { passive: true });
+    els.panel.append(top, els.scrollPrev, els.list, els.scrollNext, els.winBtn, els.edgeTools);
     els.sizeBadge = h('div', 'sizebadge', '');
     els.panel.appendChild(els.sizeBadge);
     els.resizeBuffer = h('div', 'resize-buffer');
@@ -2475,9 +2846,99 @@
     tipEl = h('div', 'tip');
     tipEl.append(h('div', 't1'), h('div', 't2'));
 
+    // Vertical popover for the other browser windows, anchored to the rail.
+    els.winPop = h('div', 'winpop hidden');
+    els.winPop.dataset.side = 'top';
+    els.winPopHead = h('div', 'winpophead');
+    els.winPopTitle = h('span', 'wptitle', 'Other windows');
+    els.winPopPin = iconBtn('btn pin winpop-pin', 'Pin window list with overlay', ICON_PIN);
+    els.winPopPin.setAttribute('aria-pressed', String(winPopPinned));
+    els.winPopPin.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setWinPopPinned(!winPopPinned);
+    });
+    els.winPopIcons = iconBtn('btn winpop-collapse', 'Show icons only', ICON_OVERLAY_COLLAPSE);
+    els.winPopIcons.setAttribute('aria-pressed', 'false');
+    els.winPopIcons.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setWinPopIcons(!winPopIcons);
+    });
+    syncWinPopPin();
+    els.winPopHead.append(els.winPopTitle, els.winPopPin, els.winPopIcons);
+    els.winPopBody = h('div', 'winpopbody');
+    els.winPop.append(els.winPopHead, els.winPopBody);
+    els.winPop.addEventListener('pointerdown', (e) => e.stopPropagation());
+    els.winPop.addEventListener('mouseenter', () => {
+      hoverWinPop = true;
+      clearClose();
+    });
+    els.winPop.addEventListener('mouseleave', () => {
+      hoverWinPop = false;
+      if (peek && !pinned && !isBox()) scheduleClose();
+    });
+    els.winPop.addEventListener('click', (e) => {
+      const tabNode = e.target.closest && e.target.closest('.tab');
+      if (tabNode) {
+        const id = Number(tabNode.dataset.id);
+        if (e.target.closest('.x')) {
+          if (!winPopPinned) closeWinPop();
+          closeTabs([id]);
+          return;
+        }
+        if (e.shiftKey) { toggleSel(id, true, !!(e.ctrlKey || e.metaKey)); return; }
+        if (e.ctrlKey || e.metaKey) { toggleSel(id, false, true); return; }
+        if (selected.size) selected.clear();
+        selId = id;
+        anchorId = id;
+        if (winPopPinned) render();
+        else closeWinPop();
+        activate(id);
+        return;
+      }
+      const wh = e.target.closest && e.target.closest('.whead');
+      if (wh) {
+        // Like vertical mode, the header itself collapses/expands this window.
+        toggleCollapse('w' + Number(wh.dataset.win));
+        return;
+      }
+      if (e.target.closest && e.target.closest('button')) return;
+      clearSel();
+    });
+    els.winPop.addEventListener('contextmenu', (e) => {
+      const tabNode = e.target.closest && e.target.closest('.tab');
+      const winNode = e.target.closest && e.target.closest('.whead');
+      if (tabNode) {
+        e.preventDefault();
+        showTabMenu(Number(tabNode.dataset.id), e.clientX, e.clientY);
+      } else if (winNode) {
+        e.preventDefault();
+        showWindowMenu(Number(winNode.dataset.win), e.clientX, e.clientY);
+      }
+    });
+    els.winPop.addEventListener('mouseover', (e) => {
+      const node = e.target.closest && e.target.closest('.tab,.whead');
+      if (!node) return;
+      if (e.relatedTarget && node.contains(e.relatedTarget)) return;
+      const title = node.dataset.title || (node.classList.contains('whead') ? '' : node.textContent.trim());
+      if (!title) return;
+      showTip(node.getBoundingClientRect(), title, node.dataset.url || node.dataset.detail || '');
+    });
+    els.winPop.addEventListener('mouseout', (e) => {
+      const node = e.target.closest && e.target.closest('.tab,.whead');
+      if (node && (!e.relatedTarget || !node.contains(e.relatedTarget))) hideTip();
+    });
+    els.winPop.addEventListener('auxclick', (e) => {
+      if (e.button !== 1) return;
+      const node = e.target.closest && e.target.closest('.tab');
+      if (node) { e.preventDefault(); closeTabs([Number(node.dataset.id)]); }
+    });
+    els.winPop.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+    hoverable(els.winPop);
     // The shield dims and blocks the page (z-index 2); the panel stays above
     // it (z-index 3), and the editable hot-zone handles stay above both (z-4).
-    ui.append(els.snap, els.editShield, els.hint, els.panel, els.dragPreview, els.resizeBuffer, tipEl);
+    ui.append(els.snap, els.editShield, els.hint, els.panel, els.winPop, els.dragPreview, els.resizeBuffer, tipEl);
     root.appendChild(ui);
 
     // Create feature modules after their shared elements exist.
@@ -2497,6 +2958,8 @@
       placement: () => ({ left: 'right', right: 'left', top: 'below', bottom: 'above' })[settings.edge],
       floating: () => isBox(),
       vertical: () => isVertical(),
+      barInset: winPopBookmarkInset,
+      barOffset: winPopBookmarkStart,
       vw,
       vh,
       setFloatingSide: (side) => {
@@ -2523,9 +2986,25 @@
       editBookmark: openBookmarkEditor,
       addBookmark: addBookmarkFromPanel
     });
+    // Closed shadow roots retarget internal pointerdowns to the host before the
+    // document sees them, so decide inside/outside on the shadow root itself.
+    root.addEventListener('pointerdown', (e) => {
+      if (!winPopOpen || winPopPinned) return;
+      const t = e.target;
+      if (!(t instanceof Node)) return;
+      if (els.winPop.contains(t) || els.winBtn.contains(t)) return;
+      if (bookmarks && bookmarks.el && bookmarks.el.contains(t)) return;
+      if (contextMenu && contextMenu.isOpen()) return;
+      if (hasBlockingPopup()) return;
+      closeWinPop();
+    }, true);
+
     els.panel.addEventListener('transitionend', (e) => {
       if (e.target !== els.panel || !['transform', 'opacity'].includes(e.propertyName) || !bookmarks) return;
       bookmarks.el.classList.remove('pending-place');
+      // A peek rail may have been clicked open mid-slide; keep the popover
+      // attached to the rail's final position.
+      if (winPopOpen) positionWinPop();
       if (shown) bookmarks.update();
     });
 
@@ -2595,7 +3074,11 @@
     });
     els.list.addEventListener('mouseover', (e) => {
       const node = e.target.closest && e.target.closest('.tab,.whead,.ghead');
-      if (!node || !els.panel.classList.contains('icons')) return;
+      if (!node) return;
+      // Horizontal strips always show a tooltip so a truncated (or hidden)
+      // title is still available; vertical rails keep the icons-only rule.
+      const horizontal = !isVertical() && !isBox();
+      if (!horizontal && !els.panel.classList.contains('icons')) return;
       if (e.relatedTarget && node.contains(e.relatedTarget)) return;
       const title = node.dataset.title || (node.classList.contains('whead') ? '' : node.textContent.trim());
       if (!title) return;
@@ -2611,7 +3094,9 @@
       if (node) { e.preventDefault(); closeTabs([Number(node.dataset.id)]); }
     });
     els.list.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
-    // Multi-tab drag/drop with real before/after positions and named destinations.
+    // Multi-tab drag/drop with real before/after positions and named
+    // destinations. The same handlers serve the main list and the other-window
+    // popover, so tabs can be dragged between them or into another window.
     const clearMarks = () => {
       ui.querySelectorAll('.drop-before,.drop-after,.drop-win,.drop-into,.drop-reorder,.drop-invalid,[data-drop]').forEach((node) => {
         node.classList.remove('drop-before', 'drop-after', 'drop-win', 'drop-into', 'drop-reorder', 'drop-invalid');
@@ -2622,15 +3107,17 @@
       const tabNode = e.target.closest && e.target.closest('.tab');
       if (tabNode) {
         const id = Number(tabNode.dataset.id);
-        if (dragIds.includes(id)) return { invalid: true, node: tabNode };
+        if (dragIds && dragIds.includes(id)) return { invalid: true, node: tabNode };
         const r = tabNode.getBoundingClientRect();
-        const after = (isBox() || isVertical()) ? e.clientY >= r.top + r.height / 2 : e.clientX >= r.left + r.width / 2;
+        const vertical = isBox() || isVertical()
+          || !!(e.target.closest && e.target.closest('.winpop'));
+        const after = vertical ? e.clientY >= r.top + r.height / 2 : e.clientX >= r.left + r.width / 2;
         return { target: { kind: 'tab', tabId: id, pos: after ? 'after' : 'before' }, node: tabNode, after };
       }
       const groupNode = e.target.closest && e.target.closest('.ghead');
       if (groupNode) {
         const gid = Number(groupNode.dataset.group);
-        const same = dragIds.length > 0 && dragIds.every((id) => getTab(id)?.tab.groupId === gid);
+        const same = dragIds && dragIds.length > 0 && dragIds.every((id) => getTab(id)?.tab.groupId === gid);
         return { target: { kind: 'group', groupId: gid }, node: groupNode, kind: same ? 'reorder' : 'into' };
       }
       const winNode = e.target.closest && e.target.closest('.whead');
@@ -2643,9 +3130,9 @@
       if (win) return { target: { kind: 'window', windowId: Number(win.dataset.win) }, node: win };
       return null;
     }
-    els.list.addEventListener('dragstart', (e) => {
+    function tabDragStart(e) {
       const tabNode = e.target.closest && e.target.closest('.tab');
-      if (!tabNode) return;
+      if (!tabNode || bookmarkDrag) return;
       const id = Number(tabNode.dataset.id);
       dragIds = orderedIds(selected.has(id) ? [...selected] : [id]);
       dragTarget = null;
@@ -2660,8 +3147,8 @@
       try { e.dataTransfer.setDragImage(preview, 12, 12); } catch (_) {}
       requestAnimationFrame(() => preview.remove());
       clearClose();
-    });
-    els.list.addEventListener('dragover', (e) => {
+    }
+    function tabDragOver(e) {
       if (!dragIds || !dragIds.length) return;
       clearMarks();
       const info = determineTarget(e);
@@ -2683,26 +3170,243 @@
         (info.node || info.head)?.classList.add('drop-win');
         if (info.head) info.head.dataset.drop = info.label || 'Move to window';
       }
-    });
-    els.list.addEventListener('drop', (e) => {
+    }
+    function tabDragDrop(e) {
+      if (!dragIds || !dragIds.length) return;
       e.preventDefault();
       const ids = dragIds;
       const target = determineTarget(e);
       clearMarks();
       dragIds = null;
       dragTarget = null;
-      if (!ids || !ids.length || !target || target.invalid || !target.target) return;
+      if (!ids.length || !target || target.invalid || !target.target) return;
       send({ type: 'move', tabIds: ids, target: target.target });
       selected.clear();
       render();
-    });
-    els.list.addEventListener('dragend', () => {
+    }
+    function tabDragEnd() {
       dragIds = null;
       dragTarget = null;
       clearMarks();
-      els.list.querySelectorAll('.tab.dragging').forEach((node) => node.classList.remove('dragging'));
+      ui.querySelectorAll('.tab.dragging').forEach((node) => node.classList.remove('dragging'));
       if (peek && !pinned && !hoverPanel) scheduleClose();
-    });
+    }
+    function bindTabDrag(container) {
+      if (!container) return;
+      container.addEventListener('dragstart', tabDragStart);
+      container.addEventListener('dragover', tabDragOver);
+      container.addEventListener('drop', tabDragDrop);
+      container.addEventListener('dragend', tabDragEnd);
+    }
+    bindTabDrag(els.list);
+    bindTabDrag(els.winPopBody);
+
+    // ---------- bookmark drag/drop ----------
+    // Bookmark items are rendered by fn-bookmarks.js. Their data attributes keep
+    // this handler independent of that module: the same drag can reorder the
+    // Chrome bookmark tree, open in a specific window/tab slot, or open on the
+    // page under the pointer.
+    const bookmarkInfo = (node) => {
+      const el = node && node.closest && node.closest('[data-bm-id]');
+      if (!el || !el.dataset.bmId) return null;
+      const index = Number(el.dataset.bmIndex);
+      return {
+        id: el.dataset.bmId,
+        parentId: el.dataset.bmParent || '',
+        index: Number.isInteger(index) ? index : null,
+        title: el.dataset.bmTitle || '',
+        url: el.dataset.bmUrl || '',
+        folder: el.dataset.bmFolder === '1',
+        el
+      };
+    };
+    const clearBookmarkMarks = () => {
+      ui.querySelectorAll('.bm-drop-before,.bm-drop-after').forEach((node) => {
+        node.classList.remove('bm-drop-before', 'bm-drop-after');
+      });
+    };
+    const clearBookmarkDrag = () => {
+      if (bookmarkDrag && bookmarkDrag.el) bookmarkDrag.el.classList.remove('bm-dragging');
+      bookmarkDrag = null;
+      bookmarkDropTarget = null;
+      clearBookmarkMarks();
+    };
+    const bookmarkDropInfo = (e) => {
+      const item = e.target.closest && e.target.closest('[data-bm-id]');
+      if (item) {
+        const info = bookmarkInfo(item);
+        if (!info) return null;
+        if (bookmarkDrag && info.id === bookmarkDrag.id) {
+          return { kind: 'invalid', node: item };
+        }
+        const r = item.getBoundingClientRect();
+        const inBar = !!(item.closest && item.closest('.bmbar'));
+        const after = inBar
+          ? e.clientX >= r.left + r.width / 2
+          : e.clientY >= r.top + r.height / 2;
+        return { kind: 'bookmark', node: item, info, after };
+      }
+      const tabNode = e.target.closest && e.target.closest('.tab');
+      if (tabNode) {
+        const tabId = Number(tabNode.dataset.id);
+        const found = getTab(tabId);
+        if (!found) return null;
+        const r = tabNode.getBoundingClientRect();
+        const inPopover = !!(tabNode.closest && tabNode.closest('.winpop'));
+        const after = inPopover
+          ? e.clientY >= r.top + r.height / 2
+          : (isBox() || isVertical())
+            ? e.clientY >= r.top + r.height / 2
+            : e.clientX >= r.left + r.width / 2;
+        return {
+          kind: 'tab', node: tabNode, after,
+          target: { tabId, windowId: found.win.id, pos: after ? 'after' : 'before' }
+        };
+      }
+      const head = e.target.closest && e.target.closest('.whead');
+      if (head) {
+        return {
+          kind: 'window', node: head.closest('.win'), head,
+          target: { windowId: Number(head.dataset.win), pos: 'end' }
+        };
+      }
+      const win = e.target.closest && e.target.closest('.win');
+      if (win) {
+        return {
+          kind: 'window', node: win,
+          target: { windowId: Number(win.dataset.win), pos: 'end' }
+        };
+      }
+      return null;
+    };
+    const showBookmarkDrop = (info) => {
+      clearMarks();
+      clearBookmarkMarks();
+      if (!info || info.kind === 'invalid') return;
+      if (info.kind === 'bookmark') {
+        info.node.classList.add(info.after ? 'bm-drop-after' : 'bm-drop-before');
+      } else if (info.kind === 'tab') {
+        info.node.classList.add(info.after ? 'drop-after' : 'drop-before');
+      } else if (info.kind === 'window') {
+        (info.node || info.head)?.classList.add('drop-win');
+        if (info.head) info.head.dataset.drop = 'Open bookmark here';
+      }
+    };
+    const moveBookmarkTo = async (source, target) => {
+      let parentId = target.info.parentId;
+      let index = target.info.index;
+      if (!parentId || !Number.isInteger(index)) return;
+      index += target.after ? 1 : 0;
+      // Chrome expects the final index after the source has been removed when
+      // moving within the same folder.
+      if (source.parentId && source.parentId === parentId
+        && Number.isInteger(source.index) && source.index < index) index--;
+      if (source.parentId && source.parentId === parentId
+        && Number.isInteger(source.index) && source.index === index) return;
+      await send({ type: 'bookmarkAction', op: 'move', id: source.id, parentId, index });
+      if (bookmarks) bookmarks.refresh();
+    };
+    const openBookmarkAt = async (source, target) => {
+      await send({
+        type: 'bookmarkAction',
+        op: 'openAt',
+        id: source.id,
+        url: source.url,
+        folder: source.folder,
+        windowId: target.windowId,
+        targetTabId: target.tabId,
+        pos: target.pos,
+        focusWindow: target.windowId !== data.cur
+      });
+      if (target.windowId === data.cur && settings.closeOnPick && !pinned && !isBox()) closePeek();
+    };
+    const resetBookmarkDragAfterDrop = () => {
+      clearMarks();
+      clearBookmarkDrag();
+      if (peek && !pinned && !hoverPanel) scheduleClose();
+    };
+    function bookmarkDragStart(e) {
+      const info = bookmarkInfo(e.target);
+      if (!info) return;
+      bookmarkDrag = info;
+      dragIds = null;
+      dragTarget = null;
+      bookmarkDropTarget = null;
+      clearMarks();
+      clearBookmarkMarks();
+      info.el.classList.add('bm-dragging');
+      e.dataTransfer.effectAllowed = 'copyMove';
+      e.dataTransfer.setData('text/plain', info.url || info.title || 'Bookmark');
+      if (info.url) e.dataTransfer.setData('text/uri-list', info.url);
+      hideTip();
+      clearClose();
+    }
+    function bookmarkDragOver(e) {
+      if (!bookmarkDrag) return;
+      const target = (e.target.closest && (e.target.closest('.windowbookmarks, .bm, .panel, .winpop')))
+        ? bookmarkDropInfo(e) : null;
+      if (!target) {
+        clearMarks();
+        clearBookmarkMarks();
+        bookmarkDropTarget = null;
+        if (e.target.closest && (e.target.closest('.bm') || e.target.closest('.panel') || e.target.closest('.winpop'))) e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      bookmarkDropTarget = target;
+      if (target.kind === 'invalid') {
+        clearMarks();
+        clearBookmarkMarks();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+        return;
+      }
+      showBookmarkDrop(target);
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = target.kind === 'bookmark' ? 'move' : 'copy';
+      }
+    }
+    function bookmarkDragDrop(e) {
+      if (!bookmarkDrag) return;
+      const source = bookmarkDrag;
+      const target = bookmarkDropInfo(e) || bookmarkDropTarget;
+      e.preventDefault();
+      e.stopPropagation();
+      if (target && target.kind === 'bookmark') {
+        void moveBookmarkTo(source, target);
+      } else if (target && (target.kind === 'tab' || target.kind === 'window')) {
+        void openBookmarkAt(source, target.target);
+      }
+      resetBookmarkDragAfterDrop();
+    }
+    function bookmarkDragEnd() {
+      if (!bookmarkDrag) return;
+      clearBookmarkDrag();
+      if (peek && !pinned && !hoverPanel) scheduleClose();
+    }
+    function pageBookmarkDragOver(e) {
+      if (!bookmarkDrag) return;
+      const t = e.target;
+      if (t === hostEl || (t && t.closest && t.closest('#fn-host'))) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    }
+    function pageBookmarkDrop(e) {
+      if (!bookmarkDrag) return;
+      const t = e.target;
+      if (t === hostEl || (t && t.closest && t.closest('#fn-host'))) return;
+      e.preventDefault();
+      const source = bookmarkDrag;
+      clearBookmarkDrag();
+      void openBookmarkAt(source, { windowId: data.cur, tabId: null, pos: 'end' });
+      if (peek && !pinned && !hoverPanel) scheduleClose();
+    }
+    ui.addEventListener('dragstart', bookmarkDragStart);
+    ui.addEventListener('dragover', bookmarkDragOver);
+    ui.addEventListener('drop', bookmarkDragDrop);
+    ui.addEventListener('dragend', bookmarkDragEnd);
+    document.addEventListener('dragover', pageBookmarkDragOver, true);
+    document.addEventListener('drop', pageBookmarkDrop, true);
 
     els.search.addEventListener('input', () => { filter = els.search.value; selId = null; render(); updateSearchClearButton(); });
     updateSearchClearButton();
@@ -2722,6 +3426,8 @@
     clearTimeout(closeTimer);
     clearTimeout(resizeTimer);
     clearTimeout(tipTimer);
+    if (winDocDown) { document.removeEventListener('pointerdown', winDocDown, true); winDocDown = null; }
+    winPopOpen = false;
     if (hostEl) hostEl.remove();
   }
 
@@ -2807,6 +3513,10 @@
         // A fresh port snapshot contains the friendly window labels.
         if (port) refreshTabs();
         else render();
+      }
+      if (ch.winPopPinned) {
+        const v = !!ch.winPopPinned.newValue;
+        if (v !== winPopPinned) setWinPopPinned(v, false);
       }
       if (ch.toolbarOrder && Array.isArray(ch.toolbarOrder.newValue)) {
         const valid = ch.toolbarOrder.newValue.filter((id) => DEFAULT_TOOLBAR_ORDER.includes(id));

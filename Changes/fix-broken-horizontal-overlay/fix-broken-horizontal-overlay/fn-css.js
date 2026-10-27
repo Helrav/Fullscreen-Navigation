@@ -103,7 +103,10 @@ globalThis.FNX.CSS = `
 .panel[data-dir=h] .top{flex-direction:row;align-items:center;border-right:1px solid var(--line)}
 .head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;background:var(--head,transparent)}
 .panel[data-dir=v] .head{border-bottom:1px solid var(--line)}
-.panel[data-dir=h] .head{flex-wrap:nowrap}
+.panel[data-dir=h] .head{flex-wrap:nowrap;padding:4px 6px;gap:4px}
+/* Horizontal rails have no expand state, so the old expand/collapse control
+   is not part of the strip. */
+.panel[data-dir=h] .overlay-toggle{display:none!important}
 .head.default-toolbar-placement{padding-right:0}
 /* Settings is attached to the overlay itself, not the header/settings dialog. */
 .edge-tools{position:absolute;z-index:8;display:flex;align-items:center;justify-content:center;pointer-events:auto}
@@ -174,7 +177,10 @@ globalThis.FNX.CSS = `
 
 /* ---------- list ---------- */
 .list{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column;gap:2px;padding:6px;overflow:auto;scrollbar-width:auto}
-.panel[data-dir=h] .list{flex-direction:row;align-items:stretch;overflow-y:hidden;padding:0}
+.panel[data-dir=h] .list{
+  flex-direction:row;align-items:stretch;overflow-y:hidden;
+  padding:0 4px 0 6px;gap:0;
+}
 .panel[data-style=windowed][data-dir=v] .list{flex-direction:column;overflow:auto}
 .win{display:flex;flex-direction:column;gap:2px;border-radius:8px}
 .win+.win{margin-top:6px}
@@ -209,18 +215,50 @@ globalThis.FNX.CSS = `
 .panel[data-dir=h] .whead,.panel[data-dir=h] .ghead{height:32px;align-self:center;border:1px solid var(--line)}
 .panel[data-dir=h] .wcount,.panel[data-dir=h] .gcount{margin-left:4px}
 
-.tab{position:relative;flex:none;min-height:32px;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;cursor:pointer;user-select:none}
-.panel[data-dir=h] .tab{width:190px;min-height:0;align-self:stretch}
-.panel[data-dir=h][data-edge=top] .tab{border-radius:0 0 8px 8px}
-.panel[data-dir=h][data-edge=bottom] .tab{border-radius:8px 8px 0 0}
+.tab{position:relative;flex:none;min-height:32px;display:flex;align-items:center;gap:0;padding:5px 8px;border-radius:8px;cursor:pointer;user-select:none}
+.tabbody{display:flex;flex:1;min-width:0;align-items:center;gap:8px}
 .tab:hover{background:var(--hover)}
 .tab.active{background:color-mix(in srgb,var(--accent) 16%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
-.panel[data-dir=h] .tab.active{box-shadow:inset 0 -3px 0 var(--accent)}
-.panel[data-dir=h][data-edge=bottom] .tab.active{box-shadow:inset 0 3px 0 var(--accent)}
 .tab.selected{background:color-mix(in srgb,var(--accent) 30%,transparent);outline:1px solid var(--accent);outline-offset:-1px}
 .tab.ctx{background:var(--sel)}
 .tab.dim .title{opacity:.55}
 .tab.dragging{opacity:.4}
+/* ---------- horizontal rail ---------- */
+/* The .tab element is the hit slot (edge to edge, gutter included); .tabbody is
+   the visible chip. Clicking the gap above/beside a chip still targets the tab,
+   the way a browser's own tab strip behaves. */
+.panel[data-dir=h] .tab{
+  width:auto;min-height:0;align-self:stretch;
+  flex:1 1 190px;min-width:44px;max-width:240px;
+  padding:0 2px;border-radius:0;background:transparent;box-shadow:none;
+}
+.panel[data-dir=h] .tabbody{
+  height:clamp(26px,calc(100% - 8px),34px);
+  padding:0 9px;border-radius:8px;
+  transition:background .12s ease;
+}
+.panel[data-dir=h] .tab:hover{background:transparent}
+.panel[data-dir=h] .tab:hover .tabbody{background-color:var(--hover)}
+.panel[data-dir=h] .tab.active:hover .tabbody{background-color:color-mix(in srgb,var(--accent) 23%,transparent)}
+.panel[data-dir=h] .tab.active{background:transparent;box-shadow:none}
+.panel[data-dir=h] .tab.active .tabbody{
+  background-color:color-mix(in srgb,var(--accent) 17%,transparent);
+  background-image:linear-gradient(var(--accent),var(--accent));
+  background-size:calc(100% - 18px) 2px;
+  background-position:50% calc(100% - 3px);
+  background-repeat:no-repeat;
+}
+.panel[data-dir=h][data-edge=bottom] .tab.active .tabbody{background-position:50% 3px}
+.panel[data-dir=h] .tab.selected{background:transparent;outline:0}
+.panel[data-dir=h] .tab.selected .tabbody{background:color-mix(in srgb,var(--accent) 30%,transparent);box-shadow:inset 0 0 0 1px var(--accent)}
+.panel[data-dir=h] .tab.ctx{background:transparent}
+.panel[data-dir=h] .tab.ctx .tabbody{background-color:var(--sel)}
+/* Chrome-like crowding: names stay until the slot is genuinely narrow, the
+   close button goes first, then the title leaves the favicon alone. */
+.panel[data-dir=h] .list.tight .tab .x{display:none}
+.panel[data-dir=h] .list.dense .tab .title,
+.panel[data-dir=h] .list.dense .tab .x{display:none}
+.panel[data-dir=h] .list.dense .tabbody{justify-content:center;padding:0 4px;gap:0}
 .fav{flex:none;width:16px;height:16px;display:grid;place-items:center}
 /* Light themes: a thin dark rim keeps white site icons visible; dark themes use none. */
 .fav img{width:16px;height:16px;max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;display:block;background:transparent;image-rendering:auto;filter:var(--fav-edge)}
@@ -234,12 +272,80 @@ globalThis.FNX.CSS = `
 .x:hover{background:var(--line);color:var(--fg)}
 .empty{padding:12px;color:var(--muted);white-space:nowrap}
 
+/* ---------- window strip button + popover ---------- */
+.panel[data-dir=v] .winbtn{display:none!important}
+.winbtn[hidden]{display:none!important}
+.panel[data-dir=h] .winbtn{
+  flex:none;align-self:center;width:32px;height:26px;margin:0 4px 0 0;
+  border-left:1px solid var(--line);border-radius:0 7px 7px 0;color:var(--muted);
+}
+.panel[data-dir=h] .winbtn .window-icon{width:16px;height:16px;opacity:.82}
+.panel[data-dir=h] .winbtn:hover,.panel[data-dir=h] .winbtn.on{color:var(--fg)}
+.panel[data-dir=h] .winbtn.on{background:var(--hover)}
+
+/* Paging arrows for a long horizontal strip. They only exist while the tabs
+   overflow; the native scrollbar is suppressed so the rail stays clean. */
+.stripnav{
+  flex:none;align-self:center;width:20px;height:26px;margin:0 2px;
+  color:var(--muted);opacity:.62;
+}
+.stripnav:hover:not([disabled]){opacity:1;background:var(--hover)}
+.stripnav[disabled]{opacity:.24;cursor:default;background:transparent}
+.stripnav[hidden]{display:none!important}
+.stripnav .chev{width:14px;height:14px;transform:rotate(0)}
+.stripnav-prev .chev{transform:rotate(180deg)}
+.panel[data-dir=h] .list{scrollbar-width:none}
+.panel[data-dir=h] .list::-webkit-scrollbar{width:0;height:0}
+
+.winpop{
+  position:fixed;z-index:5;zoom:var(--u,1);
+  display:flex;flex-direction:column;pointer-events:auto;
+  background:var(--bg);color:var(--fg);
+  border:1px solid var(--line);
+  box-shadow:0 14px 36px rgba(0,0,0,.34);
+  overflow:hidden;
+}
+.winpop.hidden{display:none}
+.winpop[data-side=top]{border-top:0;border-radius:0 0 12px 12px}
+.winpop[data-side=bottom]{border-bottom:0;border-radius:12px 12px 0 0;flex-direction:column-reverse}
+.winpop[data-side=bottom] .winpophead{border-bottom:0;border-top:1px solid var(--line)}
+.winpophead{
+  /* The bookmark bar is 36px tall; matching it puts the header divider on the
+     same line as the bar's lower edge. */
+  flex:none;display:flex;align-items:center;gap:6px;height:36px;
+  padding:0 3px 0 8px;border-bottom:1px solid var(--line);
+}
+.wptitle{
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:11px;font-weight:600;color:var(--muted);
+}
+.winpop-collapse,.winpop-pin{flex:none;width:22px;height:22px}
+.winpopbody{
+  flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:2px;
+  padding:6px;overflow:hidden;overscroll-behavior:contain;
+}
+/* The popover has its own icons-only state, mirroring the vertical overlay. */
+.winpop.icons .winpophead{justify-content:center;gap:4px;padding:0 2px}
+.winpop.icons .wptitle{display:none}
+.winpop.icons .winpop-pin,.winpop.icons .winpop-collapse{width:18px;height:18px}
+.winpop.icons .winpop-pin svg,.winpop.icons .winpop-collapse svg{width:14px;height:14px}
+.winpop.icons .tab{justify-content:center;padding:6px}
+.winpop.icons .tabbody{justify-content:center;gap:0;padding:0}
+.winpop.icons .whead{justify-content:center;gap:4px;padding:4px 6px}
+/* Only scroll when the popover is actually capped by the viewport; otherwise
+   let it size to its tabs without a stray scrollbar. */
+.winpop.scrolling .winpopbody{overflow:auto}
+.winpopbody .wbody{display:flex;flex-direction:column;gap:2px}
+.winpopbody .tab{cursor:pointer}
+.winpopbody .whead{cursor:pointer}
+
 /* icons-only mode: icons stay on the side of the overlay instead of floating in the middle */
 .icons .title,.icons .badge,.icons .x,.icons .wlabel,.icons .wbadge,.icons .wcount,.icons .gtitle,.icons .gcount{display:none}
 .icons .wnum{display:none}
 .icons .tab{justify-content:flex-start;padding:6px}
-.panel[data-side=end].icons .tab{justify-content:flex-end}
-.panel[data-dir=h].icons .tab{width:auto;justify-content:center}
+.icons .tabbody{gap:0}
+.panel[data-side=end].icons .tabbody{justify-content:flex-end}
+.panel[data-dir=h].icons .tabbody{justify-content:center;padding:0}
 .icons .whead,.icons .ghead{justify-content:flex-start;gap:4px;padding:4px}
 .panel[data-side=end].icons .whead,.panel[data-side=end].icons .ghead{justify-content:flex-end}
 .panel[data-dir=h].icons .whead,.panel[data-dir=h].icons .ghead{justify-content:center}
@@ -440,9 +546,11 @@ globalThis.FNX.CSS = `
   align-items:center;
 }
 .panel.overlay-collapsed[data-dir=v] .tab{
-  justify-content:center!important;
   padding-left:0;
   padding-right:0;
+}
+.panel.overlay-collapsed[data-dir=v] .tabbody{
+  justify-content:center;
 }
 .panel.overlay-collapsed[data-dir=v] .whead,
 .panel.overlay-collapsed[data-dir=v] .ghead{
@@ -454,15 +562,6 @@ globalThis.FNX.CSS = `
   margin-left:0;
   padding-left:0;
   border-left:0;
-}
-.panel.overlay-collapsed[data-dir=h] .head{
-  justify-content:center;
-  align-items:center;
-}
-.panel.overlay-collapsed[data-dir=h] .tab,
-.panel.overlay-collapsed[data-dir=h] .whead,
-.panel.overlay-collapsed[data-dir=h] .ghead{
-  justify-content:center;
 }
 
 /* Floating bookmarks can dock above/below a windowed overlay as a horizontal bar. */
@@ -523,103 +622,4 @@ globalThis.FNX.CSS = `
   background:var(--bg);color:var(--accent);box-shadow:0 5px 18px rgba(0,0,0,.32);pointer-events:none
 }
 .bm-drag-preview svg{width:23px;height:23px;fill:currentColor}
-
-
-/* ---------- horizontal layout: compact strip + expanded multirow tabs ---------- */
-/* The surface is decorative; the full tab element remains the hit/click/drag target. */
-.tab-surface{position:absolute;z-index:0;inset:0;pointer-events:none}
-.panel[data-dir=h] .list{padding:0;gap:2px}
-.panel[data-dir=h] .whead,
-.panel[data-dir=h] .windivider{display:none!important}
-.panel[data-dir=h] .windowsbtn{flex:none}
-.windowsbtn[hidden]{display:none!important}
-.panel[data-dir=v] .windowsbtn{display:none!important}
-
-.panel[data-dir=h] .tab{
-  position:relative;
-  width:auto;
-  min-width:0;
-  background:transparent;
-  box-shadow:none;
-  outline:none;
-}
-.panel[data-dir=h] .tab-surface{
-  inset:3px;
-  border-radius:8px;
-  background:transparent;
-  transition:background .12s ease,box-shadow .12s ease;
-}
-.panel[data-dir=h] .tab>:not(.tab-surface){position:relative;z-index:1}
-.panel[data-dir=h] .tab:hover{background:transparent}
-.panel[data-dir=h] .tab:hover .tab-surface{background:var(--hover)}
-.panel[data-dir=h] .tab.active{background:transparent;box-shadow:none}
-.panel[data-dir=h] .tab.active .tab-surface{
-  background:color-mix(in srgb,var(--accent) 16%,transparent);
-  box-shadow:inset 0 -3px 0 var(--accent);
-}
-.panel[data-dir=h][data-edge=bottom] .tab.active .tab-surface{
-  box-shadow:inset 0 3px 0 var(--accent);
-}
-.panel[data-dir=h] .tab.selected{background:transparent;outline:none}
-.panel[data-dir=h] .tab.selected .tab-surface{
-  background:color-mix(in srgb,var(--accent) 30%,transparent);
-  box-shadow:inset 0 0 0 1px var(--accent);
-}
-.panel[data-dir=h] .tab.ctx{background:transparent}
-.panel[data-dir=h] .tab.ctx .tab-surface{background:var(--sel)}
-
-/* In the short strip, tabs shrink evenly to a readable minimum, then scroll. */
-.panel[data-dir=h]:not(.horizontal-expanded) .list{
-  display:flex;
-  flex-direction:row;
-  flex-wrap:nowrap;
-  align-items:stretch;
-  overflow-x:auto;
-  overflow-y:hidden;
-  gap:2px;
-}
-.panel[data-dir=h]:not(.horizontal-expanded) .tab{
-  flex:1 1 180px;
-  min-width:112px;
-  max-width:220px;
-  min-height:0;
-  height:100%;
-  align-self:stretch;
-  padding:5px 8px;
-}
-.panel[data-dir=h]:not(.horizontal-expanded) .ghead{
-  flex:0 0 auto;
-  height:auto;
-  align-self:center;
-  padding:4px 6px;
-  margin:0 2px;
-  border:0;
-}
-
-/* When the bar is expanded, use useful rows rather than stretching every tab vertically. */
-.panel[data-dir=h].horizontal-expanded .list{
-  display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(min(180px,100%),1fr));
-  grid-auto-rows:minmax(38px,auto);
-  align-content:start;
-  justify-content:start;
-  overflow:auto;
-  gap:4px;
-}
-.panel[data-dir=h].horizontal-expanded .tab{
-  width:100%;
-  min-width:0;
-  max-width:none;
-  min-height:38px;
-  height:auto;
-  align-self:stretch;
-  padding:5px 10px;
-}
-.panel[data-dir=h].horizontal-expanded .ghead{
-  grid-column:1 / -1;
-  height:auto;
-  min-height:26px;
-  padding:4px 10px;
-  border:0;
-}
 `;

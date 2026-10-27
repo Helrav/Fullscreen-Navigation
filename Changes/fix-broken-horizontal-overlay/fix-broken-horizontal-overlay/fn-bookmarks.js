@@ -84,6 +84,21 @@
       target.addEventListener('mouseleave', () => { if (env.hideTip) env.hideTip(); });
     }
 
+    // Bookmark drag handling lives in content.js; these attributes are the
+    // small hand-off contract for both Chrome-tree reordering and dragging a
+    // bookmark onto a window/tab or the page.
+    function markBookmarkDraggable(target, n, index) {
+      if (!target || !n || n.id == null) return;
+      target.dataset.bmId = String(n.id);
+      if (n.parentId != null) target.dataset.bmParent = String(n.parentId);
+      const i = Number.isInteger(index) ? index : (Number.isInteger(n.index) ? n.index : null);
+      if (Number.isInteger(i)) target.dataset.bmIndex = String(i);
+      target.dataset.bmTitle = n.title || '';
+      target.dataset.bmUrl = n.url || '';
+      target.dataset.bmFolder = n.children ? '1' : '0';
+      target.draggable = true;
+    }
+
     function makeModeToggle(targetMode) {
       const expanding = targetMode === 'card';
       const btn = h('button', 'tbtn bmmode bm-mode-toggle');
@@ -331,7 +346,13 @@
 
     function allTop() {
       const list = data.bar.slice();
-      if (data.other.length) list.push({ id: data.otherId || 'other', title: 'Other bookmarks', children: data.other });
+      if (data.other.length) list.push({
+        id: data.otherId || 'other',
+        parentId: data.otherParentId,
+        index: data.otherIndex,
+        title: 'Other bookmarks',
+        children: data.other
+      });
       return list;
     }
 
@@ -349,11 +370,13 @@
       }
       const row = h('div', 'bmrow');
       const items = [];
-      const mk = (n) => {
+      const mk = (n, index) => {
         const b = h('button', 'bmitem');
         b.type = 'button';
         b.append(icon(n), h('span', 'bmt', label(n)));
         b.title = label(n) || n.url || '';
+        markBookmarkDraggable(b, n, index);
+        attachBookmarkTooltip(b, n);
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('contextmenu', (e) => showContextMenu(e, n));
         if (n.children) {
@@ -373,7 +396,7 @@
         }
         return b;
       };
-      for (const n of data.bar) { const b = mk(n); items.push(b); row.appendChild(b); }
+      data.bar.forEach((n, index) => { const b = mk(n, index); items.push(b); row.appendChild(b); });
       const more = h('button', 'bmitem bmmore', '»');
       more.type = 'button';
       more.title = 'More bookmarks';
@@ -381,7 +404,13 @@
       more.addEventListener('mousedown', (e) => e.preventDefault());
       bar.append(row, more);
       if (data.other.length) {
-        const o = mk({ id: data.otherId || 'other', title: 'Other bookmarks', children: data.other });
+        const o = mk({
+          id: data.otherId || 'other',
+          parentId: data.otherParentId,
+          index: data.otherIndex,
+          title: 'Other bookmarks',
+          children: data.other
+        }, data.otherIndex);
         o.classList.add('bmother');
         bar.appendChild(o);
       }
@@ -423,10 +452,11 @@
       const list = h('div', 'bmstrip');
       const pos = el.dataset.pos || '';
       const side = pos.endsWith('left') ? 'left' : pos.endsWith('right') ? 'right' : (pos.endsWith('top') ? 'above' : 'below');
-      for (const n of allTop()) {
+      allTop().forEach((n, index) => {
         const b = h('button', 'bmicon');
         b.type = 'button';
         b.appendChild(icon(n));
+        markBookmarkDraggable(b, n, index);
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('mouseenter', () => {
           if (isOpenRootFolder(n)) {
@@ -455,7 +485,7 @@
           b.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBm(n, e); } });
         }
         list.appendChild(b);
-      }
+      });
       content.append(head, list);
     }
 
@@ -473,10 +503,11 @@
         : pos.endsWith('right') ? 'right'
         : (pos.endsWith('top') ? 'above' : 'below');
 
-      for (const n of allTop()) {
+      allTop().forEach((n, index) => {
         const row = h('div', 'bmr');
         row.style.paddingLeft = '8px';
         row.append(h('span', 'bmsp'), icon(n), h('span', 'bmt', label(n)));
+        markBookmarkDraggable(row, n, index);
         attachBookmarkTooltip(row, n);
         if (n.children) {
           row.classList.add('bm-folder-menu-trigger');
@@ -786,6 +817,10 @@
       el.dataset.pos = pos;
       el.dataset.mode = (pos === 'below' || pos === 'above') ? 'bar' : s.bookmarksMode;
       st.right = 'auto';
+      // A horizontal rail's window popover takes width from the bar's right
+      // end; the bar keeps its place above/below the rail and simply yields
+      // room sideways, letting the normal overflow logic fill its >> menu.
+      const barInset = (!previewing && env.barInset) ? env.barInset() : 0;
       if (pos === 'right' || pos === 'left') {
         st.top = (r.top / u) + 'px';
         st.height = (r.height / u) + 'px';
@@ -794,9 +829,11 @@
         st.left = ((pos === 'right' ? r.right : r.left) / u) + 'px';
         st.transform = pos === 'right' ? '' : 'translateX(-100%)';
       } else {
-        const viewportW = window.innerWidth;
+        const barWidth = (pos === 'below' || pos === 'above')
+          ? Math.max(1, (r.width / u) - barInset)
+          : (r.width / u);
         st.left = horizontalEdge ? '0px' : (r.left / u) + 'px';
-        st.width = horizontalEdge ? (viewportW / u) + 'px' : (r.width / u) + 'px';
+        st.width = barWidth + 'px';
         st.height = 'auto';
         st.top = ((pos === 'below' ? r.bottom : r.top) / u) + 'px';
         st.transform = pos === 'below' ? '' : 'translateY(-100%)';

@@ -11,7 +11,10 @@ const FN_DEFAULTS = {
   // Panel
   style: 'docked',          // docked | windowed
   panelWidth: 300,
-  barHeight: 56,
+  barHeight: 40,
+  horizontalWindows: 'current', // current | all (top/bottom strip layout)
+  // Which side of a top/bottom strip the other-windows popover hangs from.
+  winPopAlign: 'right',      // right | left
   winRect: null,            // {x,y,w,h} for the floating window
   theme: 'auto',
   accent: '#4f8cff',
@@ -156,13 +159,15 @@ function fnNormalize(stored) {
   if (!['left', 'right', 'top', 'bottom'].includes(s.edge)) s.edge = 'left';
   if (!['newtab', 'current'].includes(s.searchIn)) s.searchIn = 'newtab';
   if (!['card', 'strip'].includes(s.bookmarksMode)) s.bookmarksMode = 'card';
+  if (!['current', 'all'].includes(s.horizontalWindows)) s.horizontalWindows = 'current';
+  if (!['left', 'right'].includes(s.winPopAlign)) s.winPopAlign = FN_DEFAULTS.winPopAlign;
   if (!['auto', 'left', 'right', 'top', 'bottom'].includes(s.floatingBookmarksEdge)) s.floatingBookmarksEdge = 'auto';
   if (![null, -36, 0, 36].includes(s.floatingBookmarksDockOffset)) s.floatingBookmarksDockOffset = null;
   s.zoneLength = fnClamp(Number(s.zoneLength) || 40, 5, 100);
   s.zoneStart = fnClamp(Number(s.zoneStart) || 0, 0, 100 - s.zoneLength);
   s.zoneThickness = fnClamp(Number(s.zoneThickness) || 8, 1, 40);
   s.panelWidth = fnClamp(Number(s.panelWidth) || 300, 52, 800);
-  s.barHeight = fnClamp(Number(s.barHeight) || 56, 40, 400);
+  s.barHeight = fnClamp(Number(s.barHeight) || 40, 40, 400);
   const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : d);
   // Older builds had separate background/text colours; keep the background's hue.
   if (stored && stored.themeTint === undefined && stored.customColors) {
