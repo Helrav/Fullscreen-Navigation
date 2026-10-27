@@ -1,1 +1,10 @@
-Workspace rename before fixing the return-focus/page-interaction regression.
+Fix: restore actual page focus after returning to a browser window
+
+- Rename the existing workspace before editing to Changes/fix-page-focus-after-return/fix-page-focus-after-return/.
+- Avoid reactivating the already-active source tab after window focus; activate/focus operations are no longer performed in the race-prone order.
+- Check whether the source window is already frontmost before issuing another focus request.
+- Have the content script acknowledge visibility and document.hasFocus() after the renderer has had two animation frames to settle.
+- Retry window focus if the acknowledgement shows the page still lacks focus, so hover and keyboard behavior can resume without a user click.
+- Refresh Tab Peek state and its hover-related layout on the refocus message.
+
+Validation: background.js and content.js both pass JavaScript syntax parsing. No live Chrome window test was possible.

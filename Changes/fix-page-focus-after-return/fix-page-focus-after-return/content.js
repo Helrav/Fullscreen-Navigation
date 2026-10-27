@@ -2721,11 +2721,24 @@
     window.addEventListener('focus', () => { if (!dead) resync(); });
 
     // Sent by the background after it hands focus back to this window.
-    api.runtime.onMessage.addListener((m) => {
-      if (!dead && m && m.type === 'tp-refocus') {
-        try { window.focus(); } catch (_) {}
+    // Reply only after a couple of frames so the background can verify that
+    // Chromium restored focus to this page's renderer, not just the window.
+    api.runtime.onMessage.addListener((m, sender, sendResponse) => {
+      if (!m || m.type !== 'tp-refocus') return;
+      try { window.focus(); } catch (_) {}
+      if (!dead) {
         resync();
+        kickHover();
       }
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (typeof sendResponse === 'function') {
+          sendResponse({
+            visible: document.visibilityState === 'visible',
+            hasFocus: document.hasFocus()
+          });
+        }
+      }));
+      return true;
     });
 
     api.storage.onChanged.addListener((ch, area) => {
