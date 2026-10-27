@@ -5,10 +5,11 @@ globalThis.TPX.CSS = `
 .ui{
   display:contents;
   --bg:#fbfbfa;--fg:#1c1f23;--muted:#69707a;--line:rgba(20,24,30,.14);--hover:rgba(20,24,30,.06);--sel:rgba(20,24,30,.11);
+  --fav-edge:drop-shadow(0 0 .5px rgba(20,24,30,.6)) drop-shadow(0 0 1px rgba(20,24,30,.35));
   font:13px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;color:var(--fg);
 }
-.ui[data-theme=dark]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14)}
-@media (prefers-color-scheme:dark){.ui[data-theme=auto]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14)}}
+.ui[data-theme=dark]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14);--fav-edge:none}
+@media (prefers-color-scheme:dark){.ui[data-theme=auto]{--bg:#1d2025;--fg:#e8eaed;--muted:#9aa1ab;--line:rgba(255,255,255,.14);--hover:rgba(255,255,255,.08);--sel:rgba(255,255,255,.14);--fav-edge:none}}
 
 /* Minimal scrollbars: no track; a wider thumb appears over the scroller and remains easy to grab. */
 *{scrollbar-width:auto;scrollbar-color:transparent transparent}
@@ -221,7 +222,8 @@ globalThis.TPX.CSS = `
 .tab.dim .title{opacity:.55}
 .tab.dragging{opacity:.4}
 .fav{flex:none;width:16px;height:16px;display:grid;place-items:center}
-.fav img{width:16px;height:16px;max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;display:block;background:transparent;image-rendering:auto}
+/* Light themes: a thin dark rim keeps white site icons visible; dark themes use none. */
+.fav img{width:16px;height:16px;max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;display:block;background:transparent;image-rendering:auto;filter:var(--fav-edge)}
 .fav svg{width:16px;height:16px;fill:currentColor;color:var(--muted)}
 .fav.letter{border-radius:50%;background:var(--sel);font-size:10px;font-weight:600;color:var(--muted)}
 .title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
