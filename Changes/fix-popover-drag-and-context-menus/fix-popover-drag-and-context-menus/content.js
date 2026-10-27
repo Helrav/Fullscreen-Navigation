@@ -1630,6 +1630,20 @@
     if (tipEl) tipEl.style.display = 'none';
   }
 
+  function tabTooltipSide(node) {
+    const popover = node && node.closest && node.closest('.winpop');
+    if (popover) {
+      const r = popover.getBoundingClientRect();
+      return r.left + r.width / 2 < vw() / 2 ? 'right' : 'left';
+    }
+    if (isBox()) {
+      const r = els.panel && els.panel.getBoundingClientRect();
+      return r && r.left + r.width / 2 < vw() / 2 ? 'right' : 'left';
+    }
+    if (isVertical()) return settings.edge === 'left' ? 'right' : 'left';
+    return settings.edge === 'bottom' ? 'above' : 'below';
+  }
+
   function showTip(rect, title, detail = '', preferredSide = '') {
     if (!tipEl) return;
     clearTimeout(tipTimer);
@@ -2610,7 +2624,11 @@
     const move = (ev) => {
       const dx = ev.clientX - startX, dy = ev.clientY - startY;
       if (!moved && Math.hypot(dx, dy) < 5) return;
-      if (!moved && winPopOpen) closeWinPop();
+      if (!moved) {
+        if (winPopOpen) closeWinPop();
+        if (contextMenu && contextMenu.isOpen()) contextMenu.hide();
+        hideTip();
+      }
       moved = true;
       hotZoneEditMode = false;
       updateHintVisibility();
@@ -2701,6 +2719,8 @@
       if (!moved && Math.hypot(dx, dy) < 3) return;
       if (!moved) {
         if (winPopOpen) closeWinPop();
+        if (contextMenu && contextMenu.isOpen()) contextMenu.hide();
+        hideTip();
         els.panel.classList.add('moving', 'dragging-overlay');
         if (bookmarks) bookmarks.el.classList.add('dragging-overlay');
         if (els.dragPreview) els.dragPreview.style.display = 'grid';
@@ -3021,7 +3041,7 @@
       if (e.relatedTarget && node.contains(e.relatedTarget)) return;
       const title = node.dataset.title || (node.classList.contains('whead') ? '' : node.textContent.trim());
       if (!title) return;
-      showTip(node.getBoundingClientRect(), title, node.dataset.url || node.dataset.detail || '');
+      showTip(node.getBoundingClientRect(), title, node.dataset.url || node.dataset.detail || '', tabTooltipSide(node));
     });
     els.winPop.addEventListener('mouseout', (e) => {
       const node = e.target.closest && e.target.closest('.tab,.whead');
@@ -3180,7 +3200,7 @@
       if (e.relatedTarget && node.contains(e.relatedTarget)) return;
       const title = node.dataset.title || (node.classList.contains('whead') ? '' : node.textContent.trim());
       if (!title) return;
-      showTip(node.getBoundingClientRect(), title, node.dataset.url || node.dataset.detail || '');
+      showTip(node.getBoundingClientRect(), title, node.dataset.url || node.dataset.detail || '', tabTooltipSide(node));
     });
     els.list.addEventListener('mouseout', (e) => {
       const node = e.target.closest && e.target.closest('.tab,.whead,.ghead');
