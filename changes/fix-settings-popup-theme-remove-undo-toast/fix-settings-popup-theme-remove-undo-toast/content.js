@@ -22,11 +22,11 @@
   let filter = '', selId = null, anchorId = null, needCenter = false, scrollSel = false;
   let port = null, dead = false, hoverPanel = false, lastInZone = false, needRearm = false;
   let resizing = false;
-  let openTimer = 0, closeTimer = 0, resizeTimer = 0, toastTimer = 0, tipTimer = 0;
+  let openTimer = 0, closeTimer = 0, resizeTimer = 0, tipTimer = 0;
   let mods = { ctrl: false, alt: false, shift: false, meta: false };
   let hostEl = null, root = null, ui = null, els = {};
   let contextMenu = null, bookmarks = null, dragIds = null, dragTarget = null;
-  let dockDrag = null, hotZoneEditMode = false, tipEl = null, toastSince = 0, toastCount = 0;
+  let dockDrag = null, hotZoneEditMode = false, tipEl = null;
   let searchPopupOpen = false;
   let keepPeekOpenAfterEscape = false;
   let lastPointer = { x: -1, y: -1 };
@@ -1112,65 +1112,9 @@
   async function closeTabs(ids) {
     const ordered = orderedIds(ids);
     if (!ordered.length) return;
-    const result = await send({ type: 'close', tabIds: ordered });
+    await send({ type: 'close', tabIds: ordered });
     selected.clear();
-    if (result && result.ok) {
-      if (toastCount && Date.now() < toastExpiry) toastSince = Math.min(toastSince, result.since || Date.now());
-      else { toastCount = 0; toastSince = result.since || Date.now(); }
-      toastCount += Number(result.count || ordered.length);
-      showToast();
-    }
     render();
-  }
-
-  let toastExpiry = 0;
-  function showToast() {
-    if (!els.toast) return;
-    els.toastText.textContent = toastCount + ' tab' + (toastCount === 1 ? '' : 's') + ' closed';
-    els.toast.classList.add('on');
-    const rect = els.panel?.getBoundingClientRect();
-    if (rect && shown) {
-      let x = 12, y = 12;
-      if (settings.edge === 'left') { x = rect.right + 12; y = Math.max(12, rect.bottom - 50); }
-      else if (settings.edge === 'right') { x = Math.max(12, rect.left - 12 - 250); y = Math.max(12, rect.bottom - 50); }
-      else if (settings.edge === 'top') { x = Math.max(12, rect.right - 280); y = rect.bottom + 12; }
-      else { x = Math.max(12, rect.right - 280); y = Math.max(12, rect.top - 48); }
-      els.toast.style.left = (x / u) + 'px';
-      els.toast.style.top = (y / u) + 'px';
-    } else {
-      els.toast.style.left = '12px';
-      els.toast.style.bottom = '12px';
-      els.toast.style.top = 'auto';
-    }
-    clearTimeout(toastTimer);
-    toastExpiry = Date.now() + settings.undoSeconds * 1000;
-    toastTimer = setTimeout(hideToast, settings.undoSeconds * 1000);
-  }
-
-  function hideToast() {
-    clearTimeout(toastTimer);
-    toastTimer = 0;
-    toastCount = 0;
-    toastSince = 0;
-    toastExpiry = 0;
-    if (els.toast) els.toast.classList.remove('on');
-  }
-
-  async function undoClosedTabs() {
-    if (!toastCount) return;
-    const n = toastCount, since = toastSince;
-    hideToast();
-    const result = await send({ type: 'undo', count: n, since });
-    if (result && result.restored < n) {
-      // Keep feedback truthful if the browser no longer has all sessions.
-      els.toastText.textContent = result.restored === 0
-        ? 'No recently closed tabs are available'
-        : 'Restored ' + result.restored + ' of ' + n + ' tabs';
-      els.toast.classList.add('on');
-      els.toastUndo.style.display = 'none';
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => { if (els.toastUndo) els.toastUndo.style.display = ''; hideToast(); }, 2500);
-    }
   }
 
   function hideTip() {
@@ -2167,14 +2111,10 @@
     els.snap = h('div', 'snap');
     tipEl = h('div', 'tip');
     tipEl.append(h('div', 't1'), h('div', 't2'));
-    els.toast = h('div', 'toast');
-    els.toastText = h('span', '', 'Tabs closed');
-    els.toastUndo = textBtn('', 'Undo');
-    els.toastUndo.addEventListener('click', undoClosedTabs);
-    els.toast.append(els.toastText, els.toastUndo);
+
     // The shield dims and blocks the page (z-index 2); the panel stays above
     // it (z-index 3), and the editable hot-zone handles stay above both (z-4).
-    ui.append(els.snap, els.editShield, els.hint, els.panel, els.dragPreview, els.resizeBuffer, tipEl, els.toast);
+    ui.append(els.snap, els.editShield, els.hint, els.panel, els.dragPreview, els.resizeBuffer, tipEl);
     root.appendChild(ui);
 
     // Create feature modules after their shared elements exist.
@@ -2418,7 +2358,6 @@
     clearTimeout(openTimer);
     clearTimeout(closeTimer);
     clearTimeout(resizeTimer);
-    clearTimeout(toastTimer);
     clearTimeout(tipTimer);
     if (hostEl) hostEl.remove();
   }
