@@ -2,7 +2,7 @@
 //  - overlay on left/right : a small card with names, or a narrow strip of icons
 //  - overlay on top/bottom : a Chrome-style bar with a » button for what does not fit
 (() => {
-  const X = (globalThis.TPX = globalThis.TPX || {});
+  const X = (globalThis.FNX = globalThis.FNX || {});
 
   X.createBookmarks = (env) => {
     const { ui, h } = env;

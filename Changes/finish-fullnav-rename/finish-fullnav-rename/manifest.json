@@ -26,10 +26,10 @@
       ],
       "js": [
         "defaults.js",
-        "tp-css.js",
-        "tp-push.js",
-        "tp-menu.js",
-        "tp-bookmarks.js",
+        "fn-css.js",
+        "fn-push.js",
+        "fn-menu.js",
+        "fn-bookmarks.js",
         "content.js"
       ],
       "run_at": "document_start",

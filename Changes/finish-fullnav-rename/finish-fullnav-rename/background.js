@@ -43,7 +43,7 @@ async function refreshFullscreenAfterTabMove(windowId, allowFocusFallback) {
 // unfocused (no hover, no keys) even after focus was handed back. Instead the
 // window is remembered here and goes fullscreen the first time you focus it.
 // Maps window id -> true when it also needs the toolbar refresh after a tab move.
-const PENDING_FULLSCREEN_KEY = 'tpPendingFullscreen';
+const PENDING_FULLSCREEN_KEY = 'fnPendingFullscreen';
 const pendingStore = () => (api.storage && api.storage.session) || api.storage.local;
 
 async function readPendingFullscreen() {
@@ -78,7 +78,7 @@ async function applyDeferredFullscreen(windowId) {
   else await ensureWindowFullscreen(windowId);
 }
 
-// Opens a window for Tab Peek: fullscreen (so the overlay can show in it) and/or
+// Opens a window for FullNav: fullscreen (so the overlay can show in it) and/or
 // without taking focus, as the settings ask.
 // Fullscreen is applied as a separate step AFTER the window exists, the same as
 // pressing F11. Creating a window directly with state "fullscreen" gives Chrome
@@ -132,11 +132,11 @@ async function returnFocusTo(windowId) {
   }
   if (tab && Number.isInteger(tab.id)) {
     await api.tabs.update(tab.id, { active: true }).catch(() => {});
-    api.tabs.sendMessage(tab.id, { type: 'tp-refocus' }).catch(() => {});
+    api.tabs.sendMessage(tab.id, { type: 'fn-refocus' }).catch(() => {});
   }
 }
 
-// Tab Peek keeps window labels internally because browsers do not expose a
+// FullNav keeps window labels internally because browsers do not expose a
 // general API for naming their own windows. These labels intentionally reset
 // when the browser starts again because window IDs may be reused.
 if (api.runtime.onStartup) api.runtime.onStartup.addListener(() => {
@@ -477,8 +477,8 @@ async function bookmarkAction(message, sender) {
         return { ok: true };
 
       case 'clipboardGet': {
-        const stored = local ? await local.get('tabPeekBookmarkClipboard') : {};
-        const clip = stored && stored.tabPeekBookmarkClipboard;
+        const stored = local ? await local.get('fullNavBookmarkClipboard') : {};
+        const clip = stored && stored.fullNavBookmarkClipboard;
         return { ok: true, available: !!(clip && clip.item && clip.item.id), cut: !!(clip && clip.cut) };
       }
 
@@ -486,14 +486,14 @@ async function bookmarkAction(message, sender) {
         if (!local || !id) return { ok: false, reason: 'unsupported' };
         const found = await bm.getSubTree(id);
         if (!found || !found[0]) return { ok: false, reason: 'missing-bookmark' };
-        await local.set({ tabPeekBookmarkClipboard: { item: found[0], cut: !!message.cut } });
+        await local.set({ fullNavBookmarkClipboard: { item: found[0], cut: !!message.cut } });
         return { ok: true };
       }
 
       case 'clipboardPaste': {
         if (!local || !message.parentId) return { ok: false, reason: 'missing-parent' };
-        const stored = await local.get('tabPeekBookmarkClipboard');
-        const clip = stored && stored.tabPeekBookmarkClipboard;
+        const stored = await local.get('fullNavBookmarkClipboard');
+        const clip = stored && stored.fullNavBookmarkClipboard;
         if (!clip || !clip.item || !clip.item.id) return { ok: false, reason: 'clipboard-empty' };
         const destination = String(message.parentId);
         const contains = (node, targetId) => String(node.id) === String(targetId)
@@ -503,7 +503,7 @@ async function bookmarkAction(message, sender) {
         if (clip.cut) {
           if (clip.item.children) await bm.removeTree(String(clip.item.id));
           else await bm.remove(String(clip.item.id));
-          await local.remove('tabPeekBookmarkClipboard');
+          await local.remove('fullNavBookmarkClipboard');
         }
         scheduleBookmarks();
         return { ok: true };

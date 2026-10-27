@@ -1,5 +1,5 @@
 // Shared by the content script and the options page.
-const TP_DEFAULTS = {
+const FN_DEFAULTS = {
   // Hot zone
   edge: 'left',            // left | right | top | bottom
   zoneStart: 30,            // % along the edge where the zone starts
@@ -30,7 +30,7 @@ const TP_DEFAULTS = {
   closeOnPick: true,
   // Collapse windows separately in each browser window's overlay.
   perWindowCollapse: false,
-  // Windows opened (or tabs moved to a new window) through Tab Peek open fullscreen / without taking focus.
+  // Windows opened (or tabs moved to a new window) through FullNav open fullscreen / without taking focus.
   newWindowFullscreen: true,
   openInBackground: true,
   searchIn: 'newtab',        // newtab | current
@@ -42,10 +42,10 @@ const TP_DEFAULTS = {
   floatingBookmarksDockOffset: 0 // legacy compatibility only; windowed bookmarks no longer offset the overlay
 };
 
-const tpClamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const fnClamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // Rough brightness (0 = black, 1 = white) of a #rrggbb colour.
-const tpLuma = (hex) => {
+const fnLuma = (hex) => {
   const n = parseInt(String(hex).slice(1), 16) || 0;
   return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
 };
@@ -56,7 +56,7 @@ const tpLuma = (hex) => {
 //   head  : the deepest layer (toolbar / page behind cards)
 //   bg    : the main surface (tab list)
 //   bg2   : the raised layer (menus, bookmarks, settings cards)
-function tpHexToHsl(hex) {
+function fnHexToHsl(hex) {
   const n = parseInt(String(hex).slice(1), 16) || 0;
   const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
@@ -71,22 +71,22 @@ function tpHexToHsl(hex) {
   return { h: hh, s: sat, l };
 }
 
-function tpIsDark(s) {
+function fnIsDark(s) {
   if (s.theme === 'dark') return true;
   if (s.theme === 'light') return false;
   try { return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); } catch (_) { return false; }
 }
 
-function tpPalette(s) {
+function fnPalette(s) {
   if (!s || !s.themeTint) return null;
-  const dark = tpIsDark(s);
-  const c = tpHexToHsl(s.themeColor);
+  const dark = fnIsDark(s);
+  const c = fnHexToHsl(s.themeColor);
   const h = Math.round(c.h);
   const pc = (v) => Math.round(v * 100);
   const sat = Math.min(c.s * 0.6, 0.4);            // tinted, never garish
   const hsl = (sa, l, a) => 'hsl(' + h + ' ' + pc(sa) + '% ' + pc(l) + '%' + (a == null ? '' : ' / ' + a) + ')';
   // The accent keeps the chosen colour but is nudged so it stays readable.
-  const acc = tpHexToHsl(s.themeColor);
+  const acc = fnHexToHsl(s.themeColor);
   const accL = dark ? Math.max(acc.l, 0.6) : Math.min(acc.l, 0.48);
   const accent = 'hsl(' + h + ' ' + pc(Math.max(acc.s, 0.45)) + '% ' + pc(accL) + '%)';
   if (dark) {
@@ -119,29 +119,29 @@ function tpPalette(s) {
   };
 }
 
-const TP_PALETTE_VARS = ['--head', '--bg', '--bg2', '--fg', '--muted', '--line', '--hover', '--sel', '--accent', '--fav-edge'];
+const FN_PALETTE_VARS = ['--head', '--bg', '--bg2', '--fg', '--muted', '--line', '--hover', '--sel', '--accent', '--fav-edge'];
 // Settings page variables for the same palette.
-const TP_PAGE_MAP = { '--bg': '--head', '--card': '--bg2', '--fg': '--fg', '--muted': '--muted', '--line': '--line', '--accent': '--accent' };
+const FN_PAGE_MAP = { '--bg': '--head', '--card': '--bg2', '--fg': '--fg', '--muted': '--muted', '--line': '--line', '--accent': '--accent' };
 
 // target: 'overlay' (element holding the overlay's variables) or 'page' (settings document).
-function tpApplyPalette(el, s, target) {
+function fnApplyPalette(el, s, target) {
   const st = el.style;
-  const pal = tpPalette(s);
+  const pal = fnPalette(s);
   if (target === 'page') {
-    for (const k of Object.keys(TP_PAGE_MAP)) st.removeProperty(k);
+    for (const k of Object.keys(FN_PAGE_MAP)) st.removeProperty(k);
     st.removeProperty('--line-soft');
     if (!pal) { st.colorScheme = s.theme === 'auto' ? 'light dark' : s.theme; return; }
-    for (const [k, from] of Object.entries(TP_PAGE_MAP)) st.setProperty(k, pal[from]);
+    for (const [k, from] of Object.entries(FN_PAGE_MAP)) st.setProperty(k, pal[from]);
     st.colorScheme = pal.dark ? 'dark' : 'light';
     return;
   }
-  for (const k of TP_PALETTE_VARS) {
+  for (const k of FN_PALETTE_VARS) {
     if (pal) st.setProperty(k, pal[k]); else st.removeProperty(k);
   }
 }
 
-function tpNormalize(stored) {
-  const s = { ...TP_DEFAULTS, ...(stored || {}) };
+function fnNormalize(stored) {
+  const s = { ...FN_DEFAULTS, ...(stored || {}) };
   if (stored && stored.zoneStart === undefined && stored.alignment) {
     const L = s.zoneLength;
     s.zoneStart = stored.alignment === 'start' ? 0 : stored.alignment === 'end' ? 100 - L : (100 - L) / 2;
@@ -158,11 +158,11 @@ function tpNormalize(stored) {
   if (!['card', 'strip'].includes(s.bookmarksMode)) s.bookmarksMode = 'card';
   if (!['auto', 'left', 'right', 'top', 'bottom'].includes(s.floatingBookmarksEdge)) s.floatingBookmarksEdge = 'auto';
   if (![null, -36, 0, 36].includes(s.floatingBookmarksDockOffset)) s.floatingBookmarksDockOffset = null;
-  s.zoneLength = tpClamp(Number(s.zoneLength) || 40, 5, 100);
-  s.zoneStart = tpClamp(Number(s.zoneStart) || 0, 0, 100 - s.zoneLength);
-  s.zoneThickness = tpClamp(Number(s.zoneThickness) || 8, 1, 40);
-  s.panelWidth = tpClamp(Number(s.panelWidth) || 300, 52, 800);
-  s.barHeight = tpClamp(Number(s.barHeight) || 56, 40, 400);
+  s.zoneLength = fnClamp(Number(s.zoneLength) || 40, 5, 100);
+  s.zoneStart = fnClamp(Number(s.zoneStart) || 0, 0, 100 - s.zoneLength);
+  s.zoneThickness = fnClamp(Number(s.zoneThickness) || 8, 1, 40);
+  s.panelWidth = fnClamp(Number(s.panelWidth) || 300, 52, 800);
+  s.barHeight = fnClamp(Number(s.barHeight) || 56, 40, 400);
   const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : d);
   // Older builds had separate background/text colours; keep the background's hue.
   if (stored && stored.themeTint === undefined && stored.customColors) {
@@ -171,7 +171,7 @@ function tpNormalize(stored) {
   }
   delete s.customColors; delete s.customBg; delete s.customFg;
   s.themeTint = !!s.themeTint;
-  s.themeColor = hex(s.themeColor, TP_DEFAULTS.themeColor);
+  s.themeColor = hex(s.themeColor, FN_DEFAULTS.themeColor);
   s.perWindowCollapse = !!s.perWindowCollapse;
   s.folderIconsVerticalOnly = !!s.folderIconsVerticalOnly;
   s.newWindowFullscreen = s.newWindowFullscreen !== false;
@@ -181,20 +181,20 @@ function tpNormalize(stored) {
   return s;
 }
 
-function tpAlign(s) {
+function fnAlign(s) {
   return s.zoneStart <= 1 ? 'start' : s.zoneStart + s.zoneLength >= 99 ? 'end' : 'center';
 }
 
-function tpHostMatch(host, sites) {
+function fnHostMatch(host, sites) {
   return sites.some((e) => {
     e = String(e).trim().toLowerCase();
     return e && (host === e || host.endsWith('.' + e));
   });
 }
 
-function tpPushAllowed(s, host) {
+function fnPushAllowed(s, host) {
   if (!s.push || s.style === 'windowed') return false;
-  const listed = tpHostMatch(host, s.sites);
+  const listed = fnHostMatch(host, s.sites);
   return s.siteMode === 'exclusive' ? listed : !listed;
 }
 
@@ -208,7 +208,7 @@ function tpPushAllowed(s, host) {
 //    long bookmark menus); { slot } remembers the last icon of a tab so a
 //    loading tab keeps its old icon instead of dropping to a letter.
 (() => {
-  const X = (globalThis.TPX = globalThis.TPX || {});
+  const X = (globalThis.FNX = globalThis.FNX || {});
   const api = globalThis.browser || globalThis.chrome;
   let chromium = false;
   try {

@@ -5,7 +5,7 @@
 //    side bars, chat bars and popups) ignore margins. Those are measured and moved or
 //    shrunk into the remaining safe area instead of being left underneath the overlay.
 (() => {
-  const X = (globalThis.TPX = globalThis.TPX || {});
+  const X = (globalThis.FNX = globalThis.FNX || {});
   const DIRS = ['left', 'right', 'top', 'bottom'];
   const PROPS = ['margin-left', 'margin-right', 'margin-top', 'margin-bottom', 'transition'];
   const EPS = 0.5;
@@ -113,7 +113,7 @@
 
   function consider(el) {
     if (!cur.length || !el || el.nodeType !== 1) return;
-    if (el === rootEl() || el === document.body || el.id === 'tab-peek-host') return;
+    if (el === rootEl() || el === document.body || el.id === 'fullnav-host') return;
 
     let cs;
     try { cs = getComputedStyle(el); } catch (e) { return; }

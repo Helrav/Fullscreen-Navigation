@@ -1,7 +1,7 @@
-// A small menu (with sub-menus) drawn by Tab Peek. Every entry runs a real browser feature.
+// A small menu (with sub-menus) drawn by FullNav. Every entry runs a real browser feature.
 // Item shapes: {label, action, disabled, danger, checked, dot:'#hex', icon:()=>Node, sub:[items]}
 (() => {
-  const X = (globalThis.TPX = globalThis.TPX || {});
+  const X = (globalThis.FNX = globalThis.FNX || {});
   X.createMenu = (env) => {
     const { ui, root, h } = env;
     let el = null, open = false, contextEl = null, contextOpen = false;
@@ -40,7 +40,7 @@
 
     // Escape dismisses only the topmost layer: first a context menu, then the
     // deepest opened folder submenu, then the root folder menu. It never owns
-    // or closes the Tab Peek overlay itself.
+    // or closes the FullNav overlay itself.
     function closeLatest() {
       if (contextOpen) { hideContext(); return true; }
       if (!open || !el) return false;

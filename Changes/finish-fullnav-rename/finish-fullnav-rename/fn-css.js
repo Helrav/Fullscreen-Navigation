@@ -1,5 +1,5 @@
-globalThis.TPX = globalThis.TPX || {};
-globalThis.TPX.CSS = `
+globalThis.FNX = globalThis.FNX || {};
+globalThis.FNX.CSS = `
 :host{all:initial}
 *{box-sizing:border-box}
 .ui{
@@ -20,7 +20,7 @@ globalThis.TPX.CSS = `
 *::-webkit-scrollbar-thumb{background:transparent;border:1px solid transparent;border-radius:999px;background-clip:padding-box}
 *:hover::-webkit-scrollbar-thumb{background-color:color-mix(in srgb,var(--muted) 88%,transparent)}
 *:hover::-webkit-scrollbar-thumb:hover{background-color:var(--muted)}
-/* Keep every overlay scrollbar visible whenever the pointer is anywhere over Tab Peek. */
+/* Keep every overlay scrollbar visible whenever the pointer is anywhere over FullNav. */
 :host(:hover) *,
 :host(.overlay-pointer-hover) *{scrollbar-width:auto;scrollbar-color:color-mix(in srgb,var(--muted) 88%,transparent) transparent}
 :host(:hover) *::-webkit-scrollbar-thumb,

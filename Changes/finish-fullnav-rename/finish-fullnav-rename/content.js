@@ -11,7 +11,7 @@
   };
   const COMPACT_BELOW = 90;    // keep names until the panel is genuinely narrow
 
-  let settings = tpNormalize();
+  let settings = fnNormalize();
   let pinned = false, fullscreen = false, peek = false, shown = false;
   let dockedPinned = false;
   let u = 1;                   // 1 / browser zoom: keeps the overlay the same real size on every page
@@ -140,7 +140,7 @@
         toolbarDragId = id;
         try {
           e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', 'tab-peek-toolbar:' + id);
+          e.dataTransfer.setData('text/plain', 'fullnav-toolbar:' + id);
         } catch (_) {}
         button.classList.add('toolbar-dragging');
       });
@@ -229,7 +229,7 @@
   async function loadStorage() {
     try {
       const r = await api.storage.local.get(['settings', 'pinned', 'dockedPinned', 'collapsed', 'windowNames', 'toolbarOrder', 'edgeToolId', 'bmFolderIcons']);
-      settings = tpNormalize(r.settings);
+      settings = fnNormalize(r.settings);
       folderIcons = r.bmFolderIcons && typeof r.bmFolderIcons === 'object' ? r.bmFolderIcons : {};
       pinned = !!r.pinned;
       // Legacy floating mode always forced pinned=true, so only infer from the
@@ -430,15 +430,15 @@
           top: ev.clientY,
           bottom: vh() - ev.clientY
         }[settings.edge];
-        settings.zoneThickness = tpClamp(Math.round(distance / u), 1, 40);
+        settings.zoneThickness = fnClamp(Math.round(distance / u), 1, 40);
       } else if (part === 'start' || part === 'end') {
         const pct = percentAlong(settings.edge, ev.clientX, ev.clientY);
         if (part === 'start') {
           const end = settings.zoneStart + settings.zoneLength;
-          settings.zoneStart = tpClamp(pct, 0, end - 5);
+          settings.zoneStart = fnClamp(pct, 0, end - 5);
           settings.zoneLength = end - settings.zoneStart;
         } else {
-          const end = tpClamp(pct, settings.zoneStart + 5, 100);
+          const end = fnClamp(pct, settings.zoneStart + 5, 100);
           settings.zoneLength = end - settings.zoneStart;
         }
       } else {
@@ -447,10 +447,10 @@
         // This avoids accidental jumps while adjusting its position mid-screen.
         if (distance <= Math.max(36, 24 * u)) settings.edge = edge;
         const pct = percentAlong(settings.edge, ev.clientX, ev.clientY);
-        settings.zoneStart = tpClamp(pct - settings.zoneLength / 2, 0, 100 - settings.zoneLength);
+        settings.zoneStart = fnClamp(pct - settings.zoneLength / 2, 0, 100 - settings.zoneLength);
       }
-      settings.zoneLength = tpClamp(Number(settings.zoneLength) || 40, 5, 100);
-      settings.zoneStart = tpClamp(Number(settings.zoneStart) || 0, 0, 100 - settings.zoneLength);
+      settings.zoneLength = fnClamp(Number(settings.zoneLength) || 40, 5, 100);
+      settings.zoneStart = fnClamp(Number(settings.zoneStart) || 0, 0, 100 - settings.zoneLength);
       placeHint();
       updateHintVisibility();
       // Force a layout read so the live handle's long-axis geometry is committed
@@ -608,7 +608,7 @@
         if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && flat.length) {
           e.preventDefault();
           const i = flat.findIndex((item) => item.id === selId);
-          const n = tpClamp((i < 0 ? (e.key === 'ArrowDown' ? -1 : flat.length) : i) + (e.key === 'ArrowDown' ? 1 : -1), 0, flat.length - 1);
+          const n = fnClamp((i < 0 ? (e.key === 'ArrowDown' ? -1 : flat.length) : i) + (e.key === 'ArrowDown' ? 1 : -1), 0, flat.length - 1);
           if (flat[n]) { selId = flat[n].id; anchorId = selId; scrollSel = true; render(); }
         } else if (e.key === 'Enter') {
           e.preventDefault();
@@ -718,8 +718,8 @@
     .toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase());
 
   function fillFav(el, t) {
-    if (globalThis.TPX && globalThis.TPX.favicons) {
-      globalThis.TPX.favicons.mount(el, t.url || '', t.favIconUrl || '', t.title || t.url || '?', { slot: 't' + t.id });
+    if (globalThis.FNX && globalThis.FNX.favicons) {
+      globalThis.FNX.favicons.mount(el, t.url || '', t.favIconUrl || '', t.title || t.url || '?', { slot: 't' + t.id });
       return;
     }
     el.textContent = ((t.title || '?').trim().charAt(0) || '•').toUpperCase();
@@ -1183,8 +1183,8 @@
       else if (side === 'left') { x = rect.left - tr.width - 8; y = rect.top + (rect.height - tr.height) / 2; }
       else if (side === 'below') { x = rect.left; y = rect.bottom + 8; }
       else { x = rect.left; y = rect.top - tr.height - 8; }
-      x = tpClamp(x, 4, vw() - tr.width - 4);
-      y = tpClamp(y, 4, vh() - tr.height - 4);
+      x = fnClamp(x, 4, vw() - tr.width - 4);
+      y = fnClamp(y, 4, vh() - tr.height - 4);
       tipEl.style.left = (x / u) + 'px';
       tipEl.style.top = (y / u) + 'px';
     }, 60);
@@ -1212,12 +1212,12 @@
     const backdrop = h('div', 'backdrop');
     const card = h('div', 'card');
     const head = h('div', 'cardhead');
-    const label = h('span', '', 'Tab Peek settings');
+    const label = h('span', '', 'FullNav settings');
     const close = textBtn('btn', '×');
     close.title = 'Close settings';
     head.append(label, close);
     const frame = h('iframe', 'cardframe');
-    frame.title = 'Tab Peek settings';
+    frame.title = 'FullNav settings';
     frame.src = api.runtime.getURL('options.html?embed=1');
     card.append(head, frame);
     ui.append(backdrop, card);
@@ -1665,10 +1665,10 @@
   };
 
   function syncPush(animate) {
-    if (!globalThis.TPX || !globalThis.TPX.push) return;
+    if (!globalThis.FNX || !globalThis.FNX.push) return;
     const parts = pushParts();
-    if (parts.length) TPX.push.on(parts, animate);
-    else TPX.push.off(animate);
+    if (parts.length) FNX.push.on(parts, animate);
+    else FNX.push.off(animate);
   }
 
   // ---------- layout ----------
@@ -1711,11 +1711,11 @@
     // current browser viewport; cap it only if the viewport cannot fit it.
     const screenW = Math.max(1, Number(window.screen && window.screen.width) || vw());
     const screenH = Math.max(1, Number(window.screen && window.screen.height) || vh());
-    const w = tpClamp((screenW * 0.30) / u, 220, Math.max(220, pw - 24));
+    const w = fnClamp((screenW * 0.30) / u, 220, Math.max(220, pw - 24));
     const minH = minimumWindowedHeightUnits();
-    const h0 = tpClamp((screenH * 0.35) / u, minH, Math.max(minH, ph - 24));
-    const x = settings.edge === 'right' ? Math.max(12, pw - w - 12) : settings.edge === 'left' ? 12 : tpClamp((pw - w) / 2, 12, Math.max(12, pw - w - 12));
-    const y = settings.edge === 'bottom' ? Math.max(12, ph - h0 - 12) : settings.edge === 'top' ? 12 : tpClamp((ph - h0) / 3, 12, Math.max(12, ph - h0 - 12));
+    const h0 = fnClamp((screenH * 0.35) / u, minH, Math.max(minH, ph - 24));
+    const x = settings.edge === 'right' ? Math.max(12, pw - w - 12) : settings.edge === 'left' ? 12 : fnClamp((pw - w) / 2, 12, Math.max(12, pw - w - 12));
+    const y = settings.edge === 'bottom' ? Math.max(12, ph - h0 - 12) : settings.edge === 'top' ? 12 : fnClamp((ph - h0) / 3, 12, Math.max(12, ph - h0 - 12));
     settings.winRect = { x, y, w, h: h0 };
     return settings.winRect;
   }
@@ -1729,7 +1729,7 @@
     if (Math.abs(current) > 0.1 && settings.winRect) {
       const rect = settings.winRect;
       const ph = vh() / u;
-      rect.y = tpClamp(rect.y - current, 0, Math.max(0, ph - rect.h));
+      rect.y = fnClamp(rect.y - current, 0, Math.max(0, ph - rect.h));
       settings.winRect = rect;
     }
     settings.floatingBookmarksDockOffset = 0;
@@ -1762,8 +1762,8 @@
       else if (settings.edge === 'bottom') top = anchor.top - 37;
       else top = anchor.top + (anchor.height - 32) / 2;
     }
-    left = tpClamp(left, 8, Math.max(8, viewportW - width - 8));
-    top = tpClamp(top, 8, Math.max(8, viewportH - 40));
+    left = fnClamp(left, 8, Math.max(8, viewportW - width - 8));
+    top = fnClamp(top, 8, Math.max(8, viewportH - 40));
     els.searchWrap.style.width = width + 'px';
     els.searchWrap.style.left = left + 'px';
     els.searchWrap.style.top = top + 'px';
@@ -1847,11 +1847,11 @@
     if (isBox()) {
       const pw = vw() / u, ph = vh() / u;
       const rect = ensureWindowRect();
-      const w = tpClamp(rect.w, 52, Math.max(52, pw - 12));
+      const w = fnClamp(rect.w, 52, Math.max(52, pw - 12));
       const minH = minimumWindowedHeightUnits();
-      const hh = tpClamp(rect.h, minH, Math.max(minH, ph - 12));
-      const x = tpClamp(rect.x, 0, Math.max(0, pw - w));
-      const y = tpClamp(rect.y, 0, Math.max(0, ph - hh));
+      const hh = fnClamp(rect.h, minH, Math.max(minH, ph - 12));
+      const x = fnClamp(rect.x, 0, Math.max(0, pw - w));
+      const y = fnClamp(rect.y, 0, Math.max(0, ph - hh));
       settings.winRect = { x, y, w, h: hh };
       for (const [key, value] of [['--bx', x], ['--by', y], ['--bw', w], ['--bh', hh]]) hostEl.style.setProperty(key, value + 'px');
     }
@@ -1902,12 +1902,12 @@
       const rect = ensureWindowRect();
       if (collapsed) {
         const maxWidth = Math.min(800, Math.max(52, viewportWidth - 12));
-        const width = tpClamp(Math.round(viewportWidth * 0.15), 52, maxWidth);
+        const width = fnClamp(Math.round(viewportWidth * 0.15), 52, maxWidth);
         const right = rect.x + rect.w;
         const x = settings.edge === 'right' ? right - width : rect.x;
         settings.winRect = {
           ...rect,
-          x: tpClamp(x, 0, Math.max(0, viewportWidth - width)),
+          x: fnClamp(x, 0, Math.max(0, viewportWidth - width)),
           w: width
         };
       } else {
@@ -1916,17 +1916,17 @@
         const x = settings.edge === 'right' ? right - width : rect.x;
         settings.winRect = {
           ...rect,
-          x: tpClamp(x, 0, Math.max(0, viewportWidth - width)),
+          x: fnClamp(x, 0, Math.max(0, viewportWidth - width)),
           w: width
         };
       }
     } else if (isVertical()) {
       settings.panelWidth = collapsed
-        ? tpClamp(Math.round(viewportWidth * 0.15), 52, 800)
+        ? fnClamp(Math.round(viewportWidth * 0.15), 52, 800)
         : 52;
     } else {
       settings.barHeight = collapsed
-        ? tpClamp(Math.round(viewportHeight * 0.15), 40, 400)
+        ? fnClamp(Math.round(viewportHeight * 0.15), 40, 400)
         : 40;
     }
 
@@ -1982,7 +1982,7 @@
   // Optional theme colour: tints the overlay with shades of one colour, with a
   // deeper header, a lighter raised surface for menus/bookmarks, and tuned text.
   function applyThemeTint() {
-    if (ui && typeof tpApplyPalette === 'function') tpApplyPalette(ui, settings, 'overlay');
+    if (ui && typeof fnApplyPalette === 'function') fnApplyPalette(ui, settings, 'overlay');
   }
   try {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -1996,7 +1996,7 @@
     p.dataset.edge = s.edge;
     p.dataset.dir = (isBox() || isVertical()) ? 'v' : 'h';
     p.dataset.style = s.style;
-    p.dataset.align = tpAlign(s);
+    p.dataset.align = fnAlign(s);
     p.dataset.theme = s.theme;
     // Reflow the edge button whenever switching between docked, horizontal,
     // and Windowed layouts (including a drag that changes the overlay style).
@@ -2031,18 +2031,18 @@
       if (!isBox()) {
         if (isVertical()) {
           const delta = settings.edge === 'left' ? dx : -dx;
-          settings.panelWidth = Math.round(tpClamp((start.r - start.l + delta) / u, 52, 800));
+          settings.panelWidth = Math.round(fnClamp((start.r - start.l + delta) / u, 52, 800));
         } else {
           const delta = settings.edge === 'top' ? dy : -dy;
-          settings.barHeight = Math.round(tpClamp((start.b - start.t + delta) / u, 40, 400));
+          settings.barHeight = Math.round(fnClamp((start.b - start.t + delta) / u, 40, 400));
         }
       } else {
         let { l, t, r, b } = start;
         const minW = 52 * u, minH = minimumWindowedHeightUnits() * u, W = vw(), H = vh();
-        if (handle.includes('e')) r = tpClamp(r + dx, l + minW, W);
-        if (handle.includes('w')) l = tpClamp(l + dx, 0, r - minW);
-        if (handle.includes('s')) b = tpClamp(b + dy, t + minH, H);
-        if (handle.includes('n')) t = tpClamp(t + dy, 0, b - minH);
+        if (handle.includes('e')) r = fnClamp(r + dx, l + minW, W);
+        if (handle.includes('w')) l = fnClamp(l + dx, 0, r - minW);
+        if (handle.includes('s')) b = fnClamp(b + dy, t + minH, H);
+        if (handle.includes('n')) t = fnClamp(t + dy, 0, b - minH);
         settings.winRect = { x: l / u, y: t / u, w: (r - l) / u, h: (b - t) / u };
       }
       applyGeometry();
@@ -2113,8 +2113,8 @@
     dockDrag = { startX, startY };
 
     const positionWindow = (x, y) => {
-      const xx = tpClamp(x, 0, Math.max(0, pw - dragW));
-      const yy = tpClamp(y, 0, Math.max(0, ph - dragH));
+      const xx = fnClamp(x, 0, Math.max(0, pw - dragW));
+      const yy = fnClamp(y, 0, Math.max(0, ph - dragH));
       for (const [key, value] of [['--bx', xx], ['--by', yy], ['--bw', dragW], ['--bh', dragH]]) hostEl.style.setProperty(key, value + 'px');
       return { x: xx, y: yy, w: dragW, h: dragH };
     };
@@ -2232,8 +2232,8 @@
       moved = true;
       const pw = vw() / u, ph = vh() / u;
       settings.winRect = {
-        x: tpClamp(original.x + dx / u, 0, Math.max(0, pw - original.w)),
-        y: tpClamp(original.y + dy / u, 0, Math.max(0, ph - original.h)),
+        x: fnClamp(original.x + dx / u, 0, Math.max(0, pw - original.w)),
+        y: fnClamp(original.y + dy / u, 0, Math.max(0, ph - original.h)),
         w: original.w, h: original.h
       };
       if (els.dragPreview) {
@@ -2268,7 +2268,7 @@
   }
 
   // ---------- build UI ----------
-  const CSS = globalThis.TPX && globalThis.TPX.CSS ? globalThis.TPX.CSS : '';
+  const CSS = globalThis.FNX && globalThis.FNX.CSS ? globalThis.FNX.CSS : '';
 
   function addStyles(shadow, css) {
     try {
@@ -2284,7 +2284,7 @@
 
   function build() {
     hostEl = document.createElement('div');
-    hostEl.id = 'tab-peek-host';
+    hostEl.id = 'fullnav-host';
     hostEl.style.cssText = 'all:initial!important;position:fixed!important;top:0!important;left:0!important;width:0!important;height:0!important;z-index:2147483647!important;pointer-events:none!important';
     root = hostEl.attachShadow({ mode: 'closed' });
     addStyles(root, CSS);
@@ -2316,7 +2316,7 @@
         if (dx) scroller.scrollLeft += dx;
         if (dy) scroller.scrollTop += dy;
       }
-      // Always consume wheel input over Tab Peek, even on blank/non-scrollable
+      // Always consume wheel input over FullNav, even on blank/non-scrollable
       // surfaces or at a scroll boundary, so the website underneath never moves.
       e.preventDefault();
       e.stopPropagation();
@@ -2427,14 +2427,14 @@
     root.appendChild(ui);
 
     // Create feature modules after their shared elements exist.
-    contextMenu = globalThis.TPX.createMenu({
+    contextMenu = globalThis.FNX.createMenu({
       ui, root, h, vw, vh, u: () => u,
       tip: showTip,
       hideTip,
       onOpen: () => clearClose(),
       onClose: () => { if (peek && !pinned && !isBox()) scheduleClose(); }
     });
-    bookmarks = globalThis.TPX.createBookmarks({
+    bookmarks = globalThis.FNX.createBookmarks({
       ui, h, chevron: chev, menu: contextMenu,
       settings: () => settings,
       shown: () => shown,
@@ -2597,7 +2597,7 @@
       dragTarget = null;
       tabNode.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', 'tab-peek:' + dragIds.join(','));
+      e.dataTransfer.setData('text/plain', 'fullnav:' + dragIds.join(','));
       const preview = h('div', 'dragimg' + (dragIds.length > 1 ? ' multi' : ''));
       const found = getTab(id);
       preview.appendChild(h('span', 'dtitle', found?.tab.title || 'Tab'));
@@ -2663,7 +2663,7 @@
     if (dead) return;
     dead = true;
     disconnect();
-    if (globalThis.TPX && globalThis.TPX.push) globalThis.TPX.push.off(false);
+    if (globalThis.FNX && globalThis.FNX.push) globalThis.FNX.push.off(false);
     clearTimeout(openTimer);
     clearTimeout(closeTimer);
     clearTimeout(resizeTimer);
@@ -2716,13 +2716,13 @@
       else { peek = false; hoverPanel = false; lastInZone = false; clearOpen(); clearClose(); }
       update(true);
     });
-    // Returning to this window (for example after Tab Peek briefly opened another
+    // Returning to this window (for example after FullNav briefly opened another
     // one): refresh everything right away instead of waiting for the next input.
     window.addEventListener('focus', () => { if (!dead) resync(); });
 
     // Sent by the background after it hands focus back to this window.
     api.runtime.onMessage.addListener((m) => {
-      if (!dead && m && m.type === 'tp-refocus') {
+      if (!dead && m && m.type === 'fn-refocus') {
         try { window.focus(); } catch (_) {}
         resync();
       }
@@ -2731,7 +2731,7 @@
     api.storage.onChanged.addListener((ch, area) => {
       if (dead || area !== 'local') return;
       if (ch.settings && !resizing) {
-        settings = tpNormalize(ch.settings.newValue);
+        settings = fnNormalize(ch.settings.newValue);
         applySettings();
       }
       if (ch.bmFolderIcons) {
