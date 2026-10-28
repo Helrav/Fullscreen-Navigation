@@ -336,7 +336,7 @@
       hide();
       folderHoverMode = !!(preserveFolderHover && keepFolderHover);
       if (!items.length) return;
-      el = build(items, 'menu', 'main'); ui.appendChild(el); open = true;
+      el = build(items, 'menu main', 'main'); ui.appendChild(el); open = true;
       if (env.onOpen) env.onOpen();
       place(el, x, y, side, anchorRect);
     }
