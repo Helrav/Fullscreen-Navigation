@@ -5,7 +5,7 @@
   const status = document.getElementById('status');
   const screenEl = document.getElementById('screen');
   const zoneEl = document.getElementById('zone');
-  let settings = tpNormalize();
+  let settings = fnNormalize();
   let flashTimer = 0, saveTimer = 0, lastLocalEdit = 0;
 
   screenEl.style.aspectRatio = (window.screen.width || 1920) + ' / ' + (window.screen.height || 1080);
@@ -58,7 +58,7 @@
       : '#2f6fed';
     document.documentElement.dataset.theme = theme;
     // With a theme color on, the palette (surfaces, text and accent) comes from it.
-    tpApplyPalette(document.documentElement, settings, 'page');
+    fnApplyPalette(document.documentElement, settings, 'page');
     if (!settings.themeTint) document.documentElement.style.setProperty('--accent', accent);
   }
   try {
@@ -66,8 +66,8 @@
   } catch (_) {}
 
   function fixZone() {
-    settings.zoneLength = tpClamp(Math.round(settings.zoneLength), 5, 100);
-    settings.zoneStart = tpClamp(Math.round(settings.zoneStart), 0, 100 - settings.zoneLength);
+    settings.zoneLength = fnClamp(Math.round(settings.zoneLength), 5, 100);
+    settings.zoneStart = fnClamp(Math.round(settings.zoneStart), 0, 100 - settings.zoneLength);
   }
 
   function drawZone() {
@@ -99,7 +99,7 @@
 
   async function load() {
     const r = await api.storage.local.get('settings');
-    settings = tpNormalize(r.settings);
+    settings = fnNormalize(r.settings);
     applyTheme();
     fields.forEach((el) => write(el, settings[el.dataset.key]));
     syncRows();
@@ -124,7 +124,7 @@
   // ----- hot zone preview: drag to move, drag handles to resize -----
   function point(ev) {
     const r = screenEl.getBoundingClientRect();
-    return { x: tpClamp(ev.clientX - r.left, 0, r.width), y: tpClamp(ev.clientY - r.top, 0, r.height), W: r.width, H: r.height };
+    return { x: fnClamp(ev.clientX - r.left, 0, r.width), y: fnClamp(ev.clientY - r.top, 0, r.height), W: r.width, H: r.height };
   }
 
   function afterZoneChange() {
@@ -161,7 +161,7 @@
     const len = (total * settings.zoneLength) / 100;
     const along = vertical ? y : x;
     if (edge !== settings.edge) { settings.edge = edge; settings.winRect = null; }
-    settings.zoneStart = tpClamp(Math.round(((along - len / 2) / total) * 100), 0, 100 - settings.zoneLength);
+    settings.zoneStart = fnClamp(Math.round(((along - len / 2) / total) * 100), 0, 100 - settings.zoneLength);
     afterZoneChange();
   });
 
@@ -173,14 +173,14 @@
 
   drag(zoneEl.querySelector('[data-h=a]'), (ev) => {
     const end = settings.zoneStart + settings.zoneLength;
-    const start = tpClamp(Math.round(alongPct(ev)), 0, end - 5);
+    const start = fnClamp(Math.round(alongPct(ev)), 0, end - 5);
     settings.zoneStart = start;
     settings.zoneLength = end - start;
     afterZoneChange();
   });
 
   drag(zoneEl.querySelector('[data-h=b]'), (ev) => {
-    const end = tpClamp(Math.round(alongPct(ev)), settings.zoneStart + 5, 100);
+    const end = fnClamp(Math.round(alongPct(ev)), settings.zoneStart + 5, 100);
     settings.zoneLength = end - settings.zoneStart;
     afterZoneChange();
   });
@@ -188,7 +188,7 @@
   drag(zoneEl.querySelector('[data-h=t]'), (ev) => {
     const { x, y, W, H } = point(ev);
     const dist = { left: x, right: W - x, top: y, bottom: H - y }[settings.edge];
-    settings.zoneThickness = tpClamp(Math.round(dist - 6), 1, 40);
+    settings.zoneThickness = fnClamp(Math.round(dist - 6), 1, 40);
     afterZoneChange();
   });
 
@@ -196,14 +196,14 @@
 
   document.getElementById('resetSize').addEventListener('click', () => {
     settings.winRect = null;
-    settings.panelWidth = TP_DEFAULTS.panelWidth;
-    settings.barHeight = TP_DEFAULTS.barHeight;
+    settings.panelWidth = FN_DEFAULTS.panelWidth;
+    settings.barHeight = FN_DEFAULTS.barHeight;
     writeKeys(['panelWidth', 'barHeight']);
     save();
   });
 
   document.getElementById('reset').addEventListener('click', async () => {
-    settings = tpNormalize();
+    settings = fnNormalize();
     await api.storage.local.set({ settings });
     await load();
     status.textContent = 'Reset';
@@ -214,7 +214,7 @@
   // Pick up changes made on a page (resizing the panel or editing preferences).
   api.storage.onChanged.addListener((ch, area) => {
     if (area === 'local' && ch.settings && Date.now() - lastLocalEdit > 1200) {
-      settings = tpNormalize(ch.settings.newValue);
+      settings = fnNormalize(ch.settings.newValue);
       applyTheme();
       fields.forEach((el) => { if (el.dataset.key !== 'sites' || document.activeElement !== el) write(el, settings[el.dataset.key]); });
       syncRows();

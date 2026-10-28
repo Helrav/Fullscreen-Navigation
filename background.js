@@ -7,7 +7,78 @@ async function newWindowPrefs() {
   return { fullscreen: s.newWindowFullscreen !== false, background: s.openInBackground !== false };
 }
 
-// Opens a window for Tab Peek: fullscreen (so the overlay can show in it) and/or
+// Apply fullscreen after a window has been created. Creating it first and then
+// switching state avoids Chrome's half-fullscreen window (which can expose the
+// native bookmarks bar) on some new-window paths.
+async function ensureWindowFullscreen(windowId, allowFocusFallback = true) {
+  const goFullscreen = async () => {
+    try {
+      await api.windows.update(windowId, { state: 'fullscreen' });
+    } catch (_) {
+      // Don't focus a background window just to apply fullscreen.
+      if (allowFocusFallback) {
+        try { await api.windows.update(windowId, { focused: true, state: 'fullscreen' }); } catch (_) {}
+      }
+    }
+  };
+  await goFullscreen();
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const check = await api.windows.get(windowId).catch(() => null);
+  if (check && check.state !== 'fullscreen') await goFullscreen();
+}
+
+async function refreshFullscreenAfterTabMove(windowId, allowFocusFallback) {
+  // Re-enter fullscreen after the tabs arrive to refresh Chrome's toolbar state.
+  try { await api.windows.update(windowId, { state: 'normal' }); } catch (_) {}
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  await ensureWindowFullscreen(windowId, allowFocusFallback);
+  await new Promise((resolve) => setTimeout(resolve, 180));
+  const check = await api.windows.get(windowId).catch(() => null);
+  if (check && check.state !== 'fullscreen') await ensureWindowFullscreen(windowId, allowFocusFallback);
+}
+
+// A window opened in the background must NOT be switched to fullscreen right
+// away: changing the state of an unfocused window makes the browser/OS activate
+// it, which is what pulled focus off the page you were on and left that page
+// unfocused (no hover, no keys) even after focus was handed back. Instead the
+// window is remembered here and goes fullscreen the first time you focus it.
+// Maps window id -> true when it also needs the toolbar refresh after a tab move.
+const PENDING_FULLSCREEN_KEY = 'fnPendingFullscreen';
+const pendingStore = () => (api.storage && api.storage.session) || api.storage.local;
+
+async function readPendingFullscreen() {
+  try {
+    const r = await pendingStore().get(PENDING_FULLSCREEN_KEY);
+    const value = r && r[PENDING_FULLSCREEN_KEY];
+    return value && typeof value === 'object' ? value : {};
+  } catch (_) { return {}; }
+}
+
+async function writePendingFullscreen(map) {
+  try { await pendingStore().set({ [PENDING_FULLSCREEN_KEY]: map }); } catch (_) {}
+}
+
+async function deferFullscreen(windowId, refresh) {
+  if (!Number.isInteger(windowId)) return;
+  const map = await readPendingFullscreen();
+  map[windowId] = !!refresh;
+  await writePendingFullscreen(map);
+}
+
+async function applyDeferredFullscreen(windowId) {
+  if (!Number.isInteger(windowId) || windowId < 0) return;
+  const map = await readPendingFullscreen();
+  if (!Object.prototype.hasOwnProperty.call(map, windowId)) return;
+  const refresh = !!map[windowId];
+  delete map[windowId];
+  await writePendingFullscreen(map);
+  const info = await api.windows.get(windowId).catch(() => null);
+  if (!info || info.state === 'fullscreen') return;
+  if (refresh) await refreshFullscreenAfterTabMove(windowId, true);
+  else await ensureWindowFullscreen(windowId);
+}
+
+// Opens a window for FullNav: fullscreen (so the overlay can show in it) and/or
 // without taking focus, as the settings ask.
 // Fullscreen is applied as a separate step AFTER the window exists, the same as
 // pressing F11. Creating a window directly with state "fullscreen" gives Chrome
@@ -25,49 +96,51 @@ async function createWindowFor(options, prefs, returnWindowId) {
   }
   if (!win) throw lastError || new Error('window-create-failed');
 
+  // The user wanted to stay where they were.
+  const stayPut = prefs.background && Number.isInteger(returnWindowId) && returnWindowId !== win.id;
+
   if (prefs.fullscreen && Number.isInteger(win.id)) {
-    const goFullscreen = async () => {
-      try {
-        await api.windows.update(win.id, { state: 'fullscreen' });
-      } catch (_) {
-        // Some browsers only allow it for a focused window.
-        try { await api.windows.update(win.id, { focused: true, state: 'fullscreen' }); } catch (_) {}
-      }
-    };
-    await goFullscreen();
-    // The window can still be settling; confirm once and retry if it did not take.
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    const check = await api.windows.get(win.id).catch(() => null);
-    if (check && check.state !== 'fullscreen') await goFullscreen();
+    // A window you are not going to is not switched to fullscreen now (that
+    // activates it and takes focus from your page); it goes fullscreen the
+    // first time you focus it.
+    if (stayPut) await deferFullscreen(win.id, false);
+    else await ensureWindowFullscreen(win.id);
   }
 
-  // The user wanted to stay where they were: hand focus back to that window.
-  if (prefs.background && Number.isInteger(returnWindowId) && returnWindowId !== win.id) {
-    await returnFocusTo(returnWindowId);
-  }
+  // Hand focus back to the window the user was in.
+  if (stayPut) await returnFocusTo(returnWindowId);
   return win;
 }
 
 // Giving the window focus back is not always enough: the page inside can stay
 // "unfocused" (no hover, no key input) until it is clicked. So focus the window
-// twice with a gap, re-activate its current tab, and tell the page to wake up.
+// twice with a gap, make sure it really kept focus, re-activate its current
+// tab, and tell the page to wake up.
 async function returnFocusTo(windowId) {
   const focus = () => api.windows.update(windowId, { focused: true }).catch(() => {});
   await focus();
   const [tab] = await api.tabs.query({ windowId, active: true }).catch(() => []);
   await new Promise((resolve) => setTimeout(resolve, 150));
   await focus();
+  // The other window can finish activating a moment later and take focus back,
+  // so check and retry instead of assuming the first call stuck.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const info = await api.windows.get(windowId).catch(() => null);
+    if (!info || info.focused) break;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await focus();
+  }
   if (tab && Number.isInteger(tab.id)) {
     await api.tabs.update(tab.id, { active: true }).catch(() => {});
-    api.tabs.sendMessage(tab.id, { type: 'tp-refocus' }).catch(() => {});
+    api.tabs.sendMessage(tab.id, { type: 'fn-refocus' }).catch(() => {});
   }
 }
 
-// Tab Peek keeps window labels internally because browsers do not expose a
+// FullNav keeps window labels internally because browsers do not expose a
 // general API for naming their own windows. These labels intentionally reset
 // when the browser starts again because window IDs may be reused.
 if (api.runtime.onStartup) api.runtime.onStartup.addListener(() => {
-  api.storage.local.remove('windowNames');
+  api.storage.local.remove(['windowNames', PENDING_FULLSCREEN_KEY]);
 });
 
 if (api.windows && api.windows.onRemoved) {
@@ -79,6 +152,20 @@ if (api.windows && api.windows.onRemoved) {
         await api.storage.local.set({ windowNames });
       }
     } catch (_) {}
+    try {
+      const pending = await readPendingFullscreen();
+      if (Object.prototype.hasOwnProperty.call(pending, id)) {
+        delete pending[id];
+        await writePendingFullscreen(pending);
+      }
+    } catch (_) {}
+  });
+}
+
+// A background window becomes fullscreen the first time it gets focus.
+if (api.windows && api.windows.onFocusChanged) {
+  api.windows.onFocusChanged.addListener((windowId) => {
+    applyDeferredFullscreen(windowId).catch(() => {});
   });
 }
 
@@ -213,8 +300,8 @@ async function bookmarksTree() {
   const root = (await api.bookmarks.getTree())[0];
   if (!root) return { barId: null, bar: [], other: [] };
   const mapNode = (node) => node.url
-    ? { id: node.id, parentId: node.parentId, title: typeof node.title === 'string' ? node.title : '', url: node.url }
-    : { id: node.id, parentId: node.parentId, title: node.title || 'Folder', children: (node.children || []).map(mapNode) };
+    ? { id: node.id, parentId: node.parentId, index: node.index, title: typeof node.title === 'string' ? node.title : '', url: node.url }
+    : { id: node.id, parentId: node.parentId, index: node.index, title: node.title || 'Folder', children: (node.children || []).map(mapNode) };
   let bar = null;
   let other = null;
   for (const child of root.children || []) {
@@ -224,7 +311,10 @@ async function bookmarksTree() {
   if (!bar) bar = (root.children || [])[0] || null;
   return {
     barId: bar ? bar.id : null,
+    barParentId: bar ? (bar.parentId || root.id) : root.id,
     otherId: other ? other.id : null,
+    otherParentId: other ? (other.parentId || root.id) : root.id,
+    otherIndex: other && Number.isInteger(other.index) ? other.index : (root.children || []).indexOf(other),
     bar: bar ? (bar.children || []).map(mapNode) : [],
     other: other ? (other.children || []).map(mapNode) : []
   };
@@ -303,6 +393,115 @@ async function bookmarkAction(message, sender) {
     switch (op) {
       case 'capabilities':
         return { ok: true, splitView: typeof api.tabs.createSplit === 'function', tabGroups: typeof api.tabs.group === 'function' };
+
+      case 'move': {
+        if (!id || typeof bm.move !== 'function') return { ok: false, reason: 'missing-source' };
+        const found = await bm.getSubTree(id);
+        const source = found && found[0];
+        if (!source) return { ok: false, reason: 'missing-bookmark' };
+
+        let parentId = message.parentId == null ? '' : String(message.parentId);
+        let targetNode = null;
+        if (message.targetId != null) {
+          const targetFound = await bm.getSubTree(String(message.targetId));
+          targetNode = targetFound && targetFound[0];
+          if (!targetNode) return { ok: false, reason: 'missing-target-bookmark' };
+          if (String(targetNode.id) === id) return { ok: false, reason: 'same-bookmark' };
+          // The target's actual parent is authoritative; UI rows may be clipped,
+          // lazily rendered, or carry stale parent metadata.
+          if (targetNode.parentId != null) parentId = String(targetNode.parentId);
+        }
+        if (!parentId) return { ok: false, reason: 'missing-destination' };
+
+        const parentFound = await bm.getSubTree(parentId);
+        const destination = parentFound && parentFound[0];
+        if (!destination || !Array.isArray(destination.children)) return { ok: false, reason: 'missing-bookmark-or-folder' };
+
+        const contains = (node, targetId) => String(node.id) === String(targetId)
+          || (node.children || []).some((child) => contains(child, targetId));
+        if (contains(source, destination.id)) return { ok: false, reason: 'move-into-self' };
+        const details = { parentId: String(destination.id) };
+
+        if (targetNode) {
+          // Use the live sibling array rather than cached row indices from a menu.
+          const targetIndex = destination.children.findIndex((child) => String(child.id) === String(targetNode.id));
+          if (targetIndex < 0) return { ok: false, reason: 'target-not-in-destination' };
+
+          const sameParent = String(source.parentId || '') === String(destination.id);
+          const sourceIndex = sameParent
+            ? destination.children.findIndex((child) => String(child.id) === id)
+            : -1;
+          if (sameParent && sourceIndex < 0) return { ok: false, reason: 'source-not-in-destination' };
+
+          // Compute the final slot after removing the source, then translate it
+          // into Chrome's insertion-boundary index (which is decremented for moves
+          // toward a later sibling in the same parent).
+          let finalIndex = targetIndex + (message.after ? 1 : 0);
+          if (sameParent && sourceIndex < targetIndex) finalIndex--;
+          if (sameParent && sourceIndex === finalIndex) return { ok: true, unchanged: true };
+
+          details.index = finalIndex;
+          if (sameParent && sourceIndex < finalIndex) details.index++;
+        } else if (Number.isInteger(message.index)) {
+          // Compatibility for legacy callers which still send a direct index.
+          details.index = Math.max(0, message.index);
+        }
+
+        await bm.move(id, details);
+        scheduleBookmarks();
+        return { ok: true };
+      }
+
+      case 'openAt': {
+        const found = id ? await bm.getSubTree(id) : [];
+        const node = found && found[0];
+        // URLs dropped from outside (a link, or a file as a data: URL) need no bookmark.
+        const droppedUrls = Array.isArray(message.urls)
+          ? message.urls.map((value) => String(value || '').trim())
+            .filter((value) => /^(https?|ftp|file|about|chrome|edge|brave|vivaldi|opera|data):/i.test(value))
+          : [];
+        // Dragging a folder only reorders it; it never opens the tabs inside.
+        if (node && node.children) return { ok: false, reason: 'folder-not-opened' };
+        if (!node && !droppedUrls.length) return { ok: false, reason: 'missing-bookmark' };
+        const allowedUrl = (value) => /^(https?|ftp|file|about|chrome|edge|brave|vivaldi|opera):/i.test(String(value || ''))
+          && !/^javascript:/i.test(String(value || ''));
+        const urls = [];
+        const collectUrls = (item) => {
+          if (!item) return;
+          if (item.url) {
+            if (allowedUrl(item.url)) urls.push(item.url);
+            return;
+          }
+          for (const child of item.children || []) collectUrls(child);
+        };
+        if (node) collectUrls(node);
+        urls.push(...droppedUrls);
+        if (!urls.length) return { ok: false, reason: 'no-bookmarkable-url' };
+
+        let targetWindowId = Number.isInteger(message.windowId)
+          ? message.windowId
+          : (senderTab && Number.isInteger(senderTab.windowId) ? senderTab.windowId : null);
+        let anchor = null;
+        if (Number.isInteger(message.targetTabId)) {
+          anchor = await api.tabs.get(message.targetTabId).catch(() => null);
+          if (anchor) targetWindowId = anchor.windowId;
+        }
+        if (!Number.isInteger(targetWindowId)) return { ok: false, reason: 'missing-target-window' };
+        const startIndex = anchor ? anchor.index + (message.pos === 'after' ? 1 : 0) : null;
+        const opened = [];
+        for (let i = 0; i < urls.length; i++) {
+          const details = { windowId: targetWindowId, url: urls[i], active: false };
+          if (Number.isInteger(startIndex)) details.index = startIndex + i;
+          const tab = await api.tabs.create(details);
+          if (tab && Number.isInteger(tab.id)) opened.push(tab);
+        }
+        if (!opened.length) return { ok: false, reason: 'no-tabs-opened' };
+        // Activate the first opened tab so dragging a bookmark onto the page or
+        // a window/tab always takes the user to the result.
+        await api.tabs.update(opened[0].id, { active: true }).catch(() => {});
+        if (message.focusWindow !== false) await api.windows.update(targetWindowId, { focused: true }).catch(() => {});
+        return { ok: true, count: opened.length, tabId: opened[0].id };
+      }
 
       case 'openTab':
         if (!url) return { ok: false, reason: 'missing-url' };
@@ -390,8 +589,8 @@ async function bookmarkAction(message, sender) {
         return { ok: true };
 
       case 'clipboardGet': {
-        const stored = local ? await local.get('tabPeekBookmarkClipboard') : {};
-        const clip = stored && stored.tabPeekBookmarkClipboard;
+        const stored = local ? await local.get('fnBookmarkClipboard') : {};
+        const clip = stored && stored.fnBookmarkClipboard;
         return { ok: true, available: !!(clip && clip.item && clip.item.id), cut: !!(clip && clip.cut) };
       }
 
@@ -399,14 +598,14 @@ async function bookmarkAction(message, sender) {
         if (!local || !id) return { ok: false, reason: 'unsupported' };
         const found = await bm.getSubTree(id);
         if (!found || !found[0]) return { ok: false, reason: 'missing-bookmark' };
-        await local.set({ tabPeekBookmarkClipboard: { item: found[0], cut: !!message.cut } });
+        await local.set({ fnBookmarkClipboard: { item: found[0], cut: !!message.cut } });
         return { ok: true };
       }
 
       case 'clipboardPaste': {
         if (!local || !message.parentId) return { ok: false, reason: 'missing-parent' };
-        const stored = await local.get('tabPeekBookmarkClipboard');
-        const clip = stored && stored.tabPeekBookmarkClipboard;
+        const stored = await local.get('fnBookmarkClipboard');
+        const clip = stored && stored.fnBookmarkClipboard;
         if (!clip || !clip.item || !clip.item.id) return { ok: false, reason: 'clipboard-empty' };
         const destination = String(message.parentId);
         const contains = (node, targetId) => String(node.id) === String(targetId)
@@ -416,7 +615,7 @@ async function bookmarkAction(message, sender) {
         if (clip.cut) {
           if (clip.item.children) await bm.removeTree(String(clip.item.id));
           else await bm.remove(String(clip.item.id));
-          await local.remove('tabPeekBookmarkClipboard');
+          await local.remove('fnBookmarkClipboard');
         }
         scheduleBookmarks();
         return { ok: true };
@@ -612,6 +811,62 @@ async function moveTabs(ids, target) {
   return { ok: true };
 }
 
+// Only bring the destination forward when the visible page's tab is moved.
+async function moveTabsToNewWindow(ids, currentTabId, sourceWindowId) {
+  const tabs = (await Promise.all(ids.map((id) => api.tabs.get(id).catch(() => null)))).filter(Boolean);
+  if (!tabs.length) return { ok: false, reason: 'no-tabs' };
+
+  const movingIds = tabs.map((tab) => tab.id);
+  const visibleTabIsMoving = Number.isInteger(currentTabId) && movingIds.includes(currentTabId);
+  const firstTabId = visibleTabIsMoving ? currentTabId : movingIds[0];
+  const prefs = await newWindowPrefs();
+
+  // Use a moved tab as the new window's initial tab; don't create a temporary
+  // New Tab page, which can cause Chrome's native bookmarks bar to appear.
+  let win = null;
+  try {
+    win = await api.windows.create({ tabId: firstTabId, focused: visibleTabIsMoving });
+  } catch (_) {}
+  if (!win || !Number.isInteger(win.id)) return { ok: false, reason: 'window-create-failed' };
+
+  const remainingIds = movingIds.filter((id) => id !== firstTabId);
+  if (remainingIds.length) {
+    try {
+      await api.tabs.move(remainingIds, { windowId: win.id, index: -1 });
+    } catch (_) {
+      for (const id of remainingIds) {
+        try { await api.tabs.move(id, { windowId: win.id, index: -1 }); } catch (_) {}
+      }
+    }
+  }
+
+  const destinationTabs = await api.tabs.query({ windowId: win.id }).catch(() => []);
+  const destinationIds = new Set(destinationTabs.map((tab) => tab.id));
+  const movedIds = movingIds.filter((id) => destinationIds.has(id));
+  if (!movedIds.length) {
+    await api.windows.remove(win.id).catch(() => {});
+    return { ok: false, reason: 'move-failed' };
+  }
+
+  if (prefs.fullscreen) {
+    // Only the window you are going to is made fullscreen now. A window you are
+    // not going to is made fullscreen the first time you focus it, because
+    // switching an unfocused window to fullscreen pulls focus off your page.
+    if (visibleTabIsMoving) await refreshFullscreenAfterTabMove(win.id, true);
+    else await deferFullscreen(win.id, true);
+  }
+
+  if (visibleTabIsMoving && movedIds.includes(currentTabId)) {
+    await api.tabs.update(currentTabId, { active: true }).catch(() => {});
+    await api.windows.update(win.id, { focused: true }).catch(() => {});
+  } else if (Number.isInteger(sourceWindowId)) {
+    // The selected tabs were not the one on screen: keep the original page in front.
+    await returnFocusTo(sourceWindowId);
+  }
+
+  return { ok: true, windowId: win.id, focused: visibleTabIsMoving };
+}
+
 async function handle(message, sender) {
   const senderTab = sender && sender.tab;
   const windowId = senderTab && senderTab.windowId;
@@ -719,12 +974,8 @@ async function handle(message, sender) {
           }
           break;
         }
-        case 'newWindow': {
-          const win = await createWindowFor({ tabId: ids[0] }, await newWindowPrefs(), windowId);
-          const rest = ids.slice(1);
-          if (rest.length && win && Number.isInteger(win.id)) await api.tabs.move(rest, { windowId: win.id, index: -1 });
-          break;
-        }
+        case 'newWindow':
+          return moveTabsToNewWindow(ids, senderTab && senderTab.id, senderTab && senderTab.windowId);
         case 'bookmark':
           return bookmarkTabs(ids, { parentId: message.parentId, title: message.title, folderName: message.folderName });
         case 'ungroup':
