@@ -283,6 +283,29 @@
             left = candidateSide === 'left' ? anchorRect.left - width - pad : anchorRect.right + pad;
             top = Math.max(pad, Math.min(anchorRect.top, H - height - pad));
           }
+
+          // When the anchor itself sits inside the overlay/bookmark bar, move
+          // beyond the outer edge of the obstacle, not just beyond that row.
+          // This keeps the complete popup clear of the panel wherever possible.
+          for (let pass = 0; pass < 2; pass++) {
+            const rect = { left, top, right: left + width, bottom: top + height, width, height };
+            for (const obstacle of obstacles) {
+              const anchorOverlap = rectOverlapArea(anchorRect, obstacle) > 0;
+              if (!anchorOverlap && rectOverlapArea(rect, obstacle) === 0) continue;
+              if (candidateSide === 'above' || candidateSide === 'below') {
+                if (rect.right <= obstacle.left || rect.left >= obstacle.right) continue;
+                top = candidateSide === 'above'
+                  ? Math.min(top, obstacle.top - height - pad)
+                  : Math.max(top, obstacle.bottom + pad);
+              } else {
+                if (rect.bottom <= obstacle.top || rect.top >= obstacle.bottom) continue;
+                left = candidateSide === 'left'
+                  ? Math.min(left, obstacle.left - width - pad)
+                  : Math.max(left, obstacle.right + pad);
+              }
+            }
+          }
+
           const rect = { left, top, right: left + width, bottom: top + height, width, height };
           const overflow = Math.max(0, pad - rect.left) + Math.max(0, pad - rect.top)
             + Math.max(0, rect.right - (W - pad)) + Math.max(0, rect.bottom - (H - pad));
