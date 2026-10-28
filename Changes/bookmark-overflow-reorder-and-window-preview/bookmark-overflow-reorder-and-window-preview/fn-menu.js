@@ -193,8 +193,22 @@
             });
             const openOnBookmarkDrag = (e) => {
               if (!it.bookmark || !it.bookmark.folder || it.disabled || !isBookmarkDragEvent(e)) return;
+              // Drag events bubble through each ancestor folder row. Only act
+              // on the row directly under the pointer, not on its ancestors.
+              const targetRow = e.target && e.target.closest && e.target.closest('.mi');
+              if (targetRow !== row) return;
               folderHoverMode = true;
-              if (!row.classList.contains('open')) openThisFolder();
+              if (!row.classList.contains('open')) {
+                openThisFolder();
+                return;
+              }
+              // This folder is already open to reveal the next level. When the
+              // user drags back over this parent, close its deeper open folders
+              // without closing this folder's own submenu.
+              const submenu = row.querySelector(':scope > .submenu');
+              if (submenu) submenu.querySelectorAll('.mi.open').forEach((node) => {
+                node.classList.remove('open');
+              });
             };
             row.addEventListener('dragenter', openOnBookmarkDrag);
             row.addEventListener('dragover', openOnBookmarkDrag);
