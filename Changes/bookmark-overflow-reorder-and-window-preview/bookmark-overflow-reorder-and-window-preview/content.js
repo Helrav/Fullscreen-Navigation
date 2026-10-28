@@ -29,6 +29,8 @@
   let hostEl = null, root = null, ui = null, els = {};
   let contextMenu = null, bookmarks = null, dragIds = null, dragTarget = null;
   let bookmarkDrag = null, bookmarkDropTarget = null;
+  let suppressedBookmarkClickIds = new Set();
+  let suppressBookmarkClickUntil = 0;
   let dockDrag = null, hotZoneEditMode = false, tipEl = null;
   let searchPopupOpen = false;
   let keepPeekOpenAfterEscape = false;
@@ -1154,16 +1156,11 @@
       win.dataset.win = String(w.id);
       const wh = h('div', 'whead' + (closed ? ' closed' : ''));
       wh.dataset.win = String(w.id);
-      const windowName = String(w.name || '').trim();
-      wh.title = [windowName, closed ? 'Expand tabs' : 'Collapse tabs'].filter(Boolean).join(' — ');
-      if (windowName) wh.dataset.title = windowName;
+      wh.title = closed ? 'Expand tabs' : 'Collapse tabs';
       wh.setAttribute('aria-expanded', String(!closed));
-      // Keep custom window names visible in the other-window preview. Compact
-      // icon mode hides the label visually, while dataset.title keeps the name
-      // available through the overlay's hover tooltip.
-      wh.appendChild(windowIcon());
-      if (windowName) wh.appendChild(h('span', 'wlabel', windowName));
-      wh.appendChild(h('span', 'wcount', w.tabs.length + ' Tabs'));
+      // Match vertical mode: the header is the collapse control and shows only
+      // the window icon and tab count. Window names are intentionally omitted.
+      wh.append(windowIcon(), h('span', 'wcount', w.tabs.length + ' Tabs'));
       const wb = h('div', 'wbody');
       for (const t of w.tabs || []) {
         // Background-window active tabs must not get the current-tab marker.
@@ -1586,8 +1583,8 @@
     if (current) {
       items.push({ sep: true });
       items.push({
-        label: 'Name in FullNav',
-        action: () => promptText('Name window in FullNav', current.name || '', (name) => send({ type: 'renameWindow', windowId: current.id, name }))
+        label: 'Name this window',
+        action: () => promptText('Name window', current.name || '', (name) => send({ type: 'renameWindow', windowId: current.id, name }))
       });
     }
     items.push({ sep: true });
@@ -1619,7 +1616,7 @@
       reopen,
       { label: 'Bookmark all tabs…', shortcut: 'Ctrl+Shift+D', disabled: !win.tabs.length, action: () => pickBookmarkFolder(win.tabs.map((tab) => tab.id)) },
       { sep: true },
-      { label: 'Name in FullNav…', action: () => promptText('Name window in FullNav', win.name || '', (name) => send({ type: 'renameWindow', windowId, name })) },
+      { label: 'Name window…', action: () => promptText('Name window', win.name || '', (name) => send({ type: 'renameWindow', windowId, name })) },
       {
         label: isCollapsed ? 'Expand' : 'Collapse',
         action: () => fromWinPop ? toggleWinPopCollapse(windowId) : toggleCollapse('w' + windowId)
@@ -3432,23 +3429,18 @@
       }
     };
     const moveBookmarkTo = async (source, target) => {
-      const parentId = target.info.parentId;
-      const index = target.info.index;
-      if (!parentId || !Number.isInteger(index) || !target.info.id) return;
-      // Pass the target identity, not just its rendered index. In the horizontal
-      // bookmark overflow (»), the visible rows are a slice of the full bar and
-      // can hold stale indices after a tree refresh. The background resolves the
-      // current sibling index immediately before moving, including the direction.
-      await send({
+      if (!source || !target || target.kind !== 'bookmark' || !target.info.id) return;
+      // The background resolves the destination parent and sibling order from
+      // the live tree. This avoids stale parent/index metadata in lazy submenus
+      // and the horizontal overflow (») slice.
+      const result = await send({
         type: 'bookmarkAction',
         op: 'move',
         id: source.id,
-        parentId,
-        index: index + (target.after ? 1 : 0),
         targetId: target.info.id,
         after: !!target.after
       });
-      if (bookmarks) bookmarks.refresh();
+      if (result && result.ok && bookmarks) bookmarks.refresh();
     };
     const openBookmarkAt = async (source, target) => {
       await send({
@@ -3519,10 +3511,17 @@
     function bookmarkDragDrop(e) {
       if (!bookmarkDrag) return;
       const source = bookmarkDrag;
-      const target = bookmarkDropInfo(e) || bookmarkDropTarget;
+      const liveTarget = bookmarkDropInfo(e);
+      // A native drop event can be retargeted to the dragged row in nested or
+      // overflow menus. Dragover tracks the current valid target continuously.
+      const target = bookmarkDropTarget || liveTarget;
       e.preventDefault();
       e.stopPropagation();
       if (target && target.kind === 'bookmark') {
+        // Suppress only a trailing click on the dragged or dropped bookmark.
+        // Otherwise a successful reorder can also invoke the row's open action.
+        suppressedBookmarkClickIds = new Set([String(source.id), String(target.info.id)]);
+        suppressBookmarkClickUntil = Date.now() + 700;
         void moveBookmarkTo(source, target);
       } else if (target && (target.kind === 'tab' || target.kind === 'window')) {
         void openBookmarkAt(source, target.target);
@@ -3552,6 +3551,20 @@
       void openBookmarkAt(source, { windowId: data.cur, tabId: null, pos: 'end' });
       if (peek && !pinned && !hoverPanel) scheduleClose();
     }
+    function suppressBookmarkClickAfterDrag(e) {
+      if (Date.now() > suppressBookmarkClickUntil) {
+        suppressedBookmarkClickIds.clear();
+        return;
+      }
+      const row = e.target && e.target.closest && e.target.closest('[data-bm-id]');
+      if (!row || !suppressedBookmarkClickIds.has(String(row.dataset.bmId || ''))) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      suppressedBookmarkClickIds.clear();
+      suppressBookmarkClickUntil = 0;
+    }
+    ui.addEventListener('click', suppressBookmarkClickAfterDrag, true);
     ui.addEventListener('dragstart', bookmarkDragStart);
     ui.addEventListener('dragover', bookmarkDragOver);
     ui.addEventListener('drop', bookmarkDragDrop);

@@ -395,40 +395,55 @@ async function bookmarkAction(message, sender) {
         return { ok: true, splitView: typeof api.tabs.createSplit === 'function', tabGroups: typeof api.tabs.group === 'function' };
 
       case 'move': {
-        if (!id || message.parentId == null || typeof bm.move !== 'function') return { ok: false, reason: 'missing-destination' };
+        if (!id || typeof bm.move !== 'function') return { ok: false, reason: 'missing-source' };
         const found = await bm.getSubTree(id);
         const source = found && found[0];
-        const parentFound = await bm.getSubTree(String(message.parentId));
+        if (!source) return { ok: false, reason: 'missing-bookmark' };
+
+        let parentId = message.parentId == null ? '' : String(message.parentId);
+        let targetNode = null;
+        if (message.targetId != null) {
+          const targetFound = await bm.getSubTree(String(message.targetId));
+          targetNode = targetFound && targetFound[0];
+          if (!targetNode) return { ok: false, reason: 'missing-target-bookmark' };
+          if (String(targetNode.id) === id) return { ok: false, reason: 'same-bookmark' };
+          // The target's actual parent is authoritative; UI rows may be clipped,
+          // lazily rendered, or carry stale parent metadata.
+          if (targetNode.parentId != null) parentId = String(targetNode.parentId);
+        }
+        if (!parentId) return { ok: false, reason: 'missing-destination' };
+
+        const parentFound = await bm.getSubTree(parentId);
         const destination = parentFound && parentFound[0];
-        if (!source || !destination || !Array.isArray(destination.children)) return { ok: false, reason: 'missing-bookmark-or-folder' };
+        if (!destination || !Array.isArray(destination.children)) return { ok: false, reason: 'missing-bookmark-or-folder' };
+
         const contains = (node, targetId) => String(node.id) === String(targetId)
           || (node.children || []).some((child) => contains(child, targetId));
         if (contains(source, destination.id)) return { ok: false, reason: 'move-into-self' };
-        const details = { parentId: String(message.parentId) };
+        const details = { parentId: String(destination.id) };
 
-        if (message.targetId != null) {
-          // Resolve the drop target against the live bookmark tree. The horizontal
-          // overflow menu (») renders only a slice of the bookmark bar, so its
-          // stored row indices are not authoritative after a reorder/refresh.
-          const targetId = String(message.targetId);
-          if (targetId === id) return { ok: false, reason: 'same-bookmark' };
-          const targetNode = destination.children.find((child) => String(child.id) === targetId);
-          if (!targetNode) return { ok: false, reason: 'target-not-in-destination' };
-          const targetIndex = Number.isInteger(targetNode.index)
-            ? targetNode.index
-            : destination.children.indexOf(targetNode);
-          const requestedIndex = Math.max(0, targetIndex + (message.after ? 1 : 0));
+        if (targetNode) {
+          // Use the live sibling array rather than cached row indices from a menu.
+          const targetIndex = destination.children.findIndex((child) => String(child.id) === String(targetNode.id));
+          if (targetIndex < 0) return { ok: false, reason: 'target-not-in-destination' };
 
-          // Chrome adjusts the index itself when a bookmark is moved downward
-          // within the same parent. Account for that only when detecting a no-op;
-          // pass Chrome the unadjusted insertion boundary below.
-          if (String(source.parentId) === String(destination.id) && Number.isInteger(source.index)) {
-            const resultingIndex = source.index < requestedIndex ? requestedIndex - 1 : requestedIndex;
-            if (resultingIndex === source.index) return { ok: true, unchanged: true };
-          }
-          details.index = requestedIndex;
+          const sameParent = String(source.parentId || '') === String(destination.id);
+          const sourceIndex = sameParent
+            ? destination.children.findIndex((child) => String(child.id) === id)
+            : -1;
+          if (sameParent && sourceIndex < 0) return { ok: false, reason: 'source-not-in-destination' };
+
+          // Compute the final slot after removing the source, then translate it
+          // into Chrome's insertion-boundary index (which is decremented for moves
+          // toward a later sibling in the same parent).
+          let finalIndex = targetIndex + (message.after ? 1 : 0);
+          if (sameParent && sourceIndex < targetIndex) finalIndex--;
+          if (sameParent && sourceIndex === finalIndex) return { ok: true, unchanged: true };
+
+          details.index = finalIndex;
+          if (sameParent && sourceIndex < finalIndex) details.index++;
         } else if (Number.isInteger(message.index)) {
-          // Compatibility fallback for other callers that send only an index.
+          // Compatibility for legacy callers which still send a direct index.
           details.index = Math.max(0, message.index);
         }
 

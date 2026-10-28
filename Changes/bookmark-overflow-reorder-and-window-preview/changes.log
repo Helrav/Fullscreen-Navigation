@@ -16,3 +16,11 @@ Update 2026-10-28 — bookmark overflow reorder and window preview
 
 Validation: JavaScript syntax parsing passed for the edited scripts, and representative same-parent reorder directions were checked against Chrome's index-adjustment behavior. No live Chrome UI test was run.
 - Clarify the rename menu as FullNav-only: the public extension API cannot rename Chrome's native taskbar/window-preview title.
+
+Follow-up 2026-10-28 — bookmark drag and overflow correction
+
+- Reverted the unrequested window-preview label changes and restored the previous window-name menu wording and preview appearance.
+- Resolve reorder destination from the live target bookmark and its actual parent; calculate the target slot from the live sibling array and translate it into Chrome's insertion-boundary index. This avoids relying on cached indices or parent IDs from the horizontal » slice and lazy submenus.
+- Prefer the last valid dragover target where native drop events are retargeted in nested/overflow menus. Suppress a trailing click only for the dragged and dropped bookmark IDs, so a reorder cannot immediately trigger either bookmark's open action.
+
+Validation: JavaScript syntax parsing passed for content.js and background.js. Representative upward, downward, end-position, and no-op sibling reorder cases passed simulation. No live Chrome UI test was run.
