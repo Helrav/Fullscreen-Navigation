@@ -62,9 +62,10 @@ globalThis.FNX.CSS = `
 .panel[data-style=windowed].with-floating-bookmarks.bookmarks-bottom{border-bottom-left-radius:0;border-bottom-right-radius:0}
 .panel.moving{transition:none}
 .panel.dragging-overlay{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
-/* Bookmark rows use the same drag feedback whether they are in the root bar,
-   the vertical list, or a folder popover. */
-.bm-dragging{opacity:.45!important}
+/* Bookmark drop targets use the same reorder feedback in the root bar,
+   vertical list, or folder popover. The dragged source itself stays opaque. */
+/* Keep the source row opaque during native bookmark dragging. */
+.bm-dragging{opacity:1!important}
 .bm-drop-before{box-shadow:inset 0 2px 0 var(--accent)!important}
 .bm-drop-after{box-shadow:inset 0 -2px 0 var(--accent)!important}
 .bmbar .bm-drop-before{box-shadow:inset 2px 0 0 var(--accent)!important}
@@ -401,8 +402,6 @@ globalThis.FNX.CSS = `
 /* ---------- context menu ---------- */
 .menu,.submenu{min-width:190px;padding:5px;border-radius:10px;background:var(--bg2,var(--bg));color:var(--fg);box-shadow:0 0 0 1px var(--line),0 12px 32px rgba(0,0,0,.32);user-select:none;pointer-events:auto;touch-action:manipulation}
 .menu{position:fixed;zoom:var(--u,1);z-index:2147483000}
-/* Folder/overflow popups stay beside the overlay; the panel/bar wins if space is tight. */
-.menu.main{z-index:2}
 /* The one-item position menu should not reserve the normal menu's icon gutter. */
 .menu.compact-context{min-width:0;width:max-content;max-width:calc(100vw - 8px);padding:3px}
 .menu.compact-context .mi{gap:4px;padding:6px 8px}
