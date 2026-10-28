@@ -89,6 +89,13 @@ globalThis.FNX.CSS = `
 .rz[data-h=se]{bottom:0;right:0;width:18px;height:18px;cursor:nwse-resize}
 .panel[data-style=docked] .rz[data-h=e],.panel[data-style=docked] .rz[data-h=w]{top:0;bottom:0}
 .panel[data-style=docked] .rz[data-h=n],.panel[data-style=docked] .rz[data-h=s]{left:0;right:0}
+/* DISABLED ONLY: horizontal docked rails no longer resize by dragging their bottom/top line.
+   Keep the original grips and handlers in place so this can be re-enabled later. */
+.panel[data-style=docked][data-dir=h][data-edge=top] .rz[data-h=s],
+.panel[data-style=docked][data-dir=h][data-edge=bottom] .rz[data-h=n]{
+  display:none!important;
+  pointer-events:none!important;
+}
 .rz::after{content:"";position:absolute;display:block;pointer-events:none;opacity:0;background:color-mix(in srgb,var(--accent) 45%,transparent)}
 .rz:hover::after,.panel.resizing .rz::after{opacity:1}
 .rz[data-h=e]::after{top:0;bottom:0;right:0;width:4px}
