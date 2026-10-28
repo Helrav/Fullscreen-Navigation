@@ -35,3 +35,15 @@ Follow-up 2026-10-28 — bookmark popup layering and drag-open folders
 Validation: syntax parsing passed for content.js, fn-menu.js, fn-bookmarks.js, and fn-css.js. Static assertions confirmed folder drag guards are gone and drag-hover listeners are present. No live Chrome UI test was run.
 - Final placement polish: nested submenus retain their normal right-side placement when the left and right options score equally.
 - Popup placement now moves beyond the outer edge of the overlay/bar when the anchor row is inside it, rather than only clearing the row itself.
+
+
+Follow-up 2026-10-28 — correct bookmark popup placement and drag feedback
+
+- Fixed the root popup class so the obstacle-aware placement logic actually runs for bookmark-folder and overflow menus. The previous code checked for `.menu.main`, but the root menu was created without the `main` class, so the positioning logic never applied.
+- Score all four popup directions against the overlay panel and visible bookmark bar, preferring a clear on-screen position rather than clamping a popup back over the overlay.
+- Restore the intended stacking order by removing the rule that forced root bookmark menus behind the overlay. Modal edit dialogs still place menus/submenus beneath the modal and disable their pointer interaction; normal bookmark tooltips remain above menus outside modals.
+- Disable dragging folder rows as sources while keeping bookmark leaf items draggable, including items inside nested folders. Folder rows remain valid drop targets and open when a dragged bookmark is hovered over them. This avoids Chrome capturing the folder row's nested submenu in the drag preview and avoids the translucent-folder effect.
+- Keep the dragged source opaque.
+- Clear tab-bar insertion markers for non-tab drags (bookmark items and external links/files), without changing the normal before/after indicators for actual tab-to-tab reordering.
+
+Validation: source assertions and JavaScript syntax checks are pending; no live Chrome UI test has been run.
