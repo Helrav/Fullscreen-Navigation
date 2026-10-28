@@ -105,8 +105,8 @@
           row.dataset.bmTitle = String(bm.title || '');
           row.dataset.bmUrl = String(bm.url || '');
           row.dataset.bmFolder = bm.folder ? '1' : '0';
-          // Folder entries and leaf bookmarks are both draggable sources.
-          row.draggable = true;
+          // Folder rows contain nested submenu DOM, so only leaf bookmarks are draggable sources.
+          row.draggable = bm.folder !== true;
         }
         if (it.tooltip && it.tooltip.title && typeof env.tip === 'function') {
           row.addEventListener('mouseenter', () => {
@@ -258,65 +258,60 @@
       return w * h;
     }
 
-    function oppositeSide(side) {
-      return ({ above: 'below', below: 'above', left: 'right', right: 'left' })[side] || side;
-    }
-
     function place(menuEl, x, y, side, anchorRect = null) {
       const u = env.u() || 1;
       menuEl.style.left = (x / u) + 'px';
       menuEl.style.top = (y / u) + 'px';
       const measured = menuEl.getBoundingClientRect();
 
-      // Bookmark-folder popups stay beside the bar/panel when possible. If no
-      // clear side fits, the overlay is layered above the popup as a final guard.
       if (menuEl.classList.contains('main') && anchorRect) {
         const width = measured.width, height = measured.height;
         const W = env.vw(), H = env.vh(), pad = 4;
         const obstacles = popupObstacleRects();
-        const options = [side, oppositeSide(side)].map((candidateSide) => {
-          let left, top;
-          if (candidateSide === 'above' || candidateSide === 'below') {
-            left = Math.max(pad, Math.min(anchorRect.left, W - width - pad));
-            top = candidateSide === 'above' ? anchorRect.top - height - pad : anchorRect.bottom + pad;
-          } else {
-            left = candidateSide === 'left' ? anchorRect.left - width - pad : anchorRect.right + pad;
-            top = Math.max(pad, Math.min(anchorRect.top, H - height - pad));
-          }
+        const sides = ['right', 'left', 'below', 'above'];
+        const candidates = sides.map((candidateSide) => {
+          let left = candidateSide === 'left' ? anchorRect.left - width - pad
+            : candidateSide === 'right' ? anchorRect.right + pad
+            : Math.max(pad, Math.min(anchorRect.left, W - width - pad));
+          let top = candidateSide === 'above' ? anchorRect.top - height - pad
+            : candidateSide === 'below' ? anchorRect.bottom + pad
+            : Math.max(pad, Math.min(anchorRect.top, H - height - pad));
 
-          // When the anchor itself sits inside the overlay/bookmark bar, move
-          // beyond the outer edge of the obstacle, not just beyond that row.
-          // This keeps the complete popup clear of the panel wherever possible.
-          for (let pass = 0; pass < 2; pass++) {
-            const rect = { left, top, right: left + width, bottom: top + height, width, height };
+          for (let pass = 0; pass < obstacles.length + 1; pass++) {
+            let changed = false;
+            const rect = { left, top, right: left + width, bottom: top + height };
             for (const obstacle of obstacles) {
-              const anchorOverlap = rectOverlapArea(anchorRect, obstacle) > 0;
-              if (!anchorOverlap && rectOverlapArea(rect, obstacle) === 0) continue;
-              if (candidateSide === 'above' || candidateSide === 'below') {
-                if (rect.right <= obstacle.left || rect.left >= obstacle.right) continue;
-                top = candidateSide === 'above'
-                  ? Math.min(top, obstacle.top - height - pad)
-                  : Math.max(top, obstacle.bottom + pad);
-              } else {
+              const anchorInside = rectOverlapArea(anchorRect, obstacle) > 0;
+              if (!anchorInside && rectOverlapArea(rect, obstacle) === 0) continue;
+              if (candidateSide === 'left' || candidateSide === 'right') {
                 if (rect.bottom <= obstacle.top || rect.top >= obstacle.bottom) continue;
-                left = candidateSide === 'left'
-                  ? Math.min(left, obstacle.left - width - pad)
-                  : Math.max(left, obstacle.right + pad);
+                const next = candidateSide === 'left' ? obstacle.left - width - pad : obstacle.right + pad;
+                if (next !== left) { left = next; changed = true; }
+              } else {
+                if (rect.right <= obstacle.left || rect.left >= obstacle.right) continue;
+                const next = candidateSide === 'above' ? obstacle.top - height - pad : obstacle.bottom + pad;
+                if (next !== top) { top = next; changed = true; }
               }
             }
+            if (!changed) break;
           }
-
-          const rect = { left, top, right: left + width, bottom: top + height, width, height };
-          const overflow = Math.max(0, pad - rect.left) + Math.max(0, pad - rect.top)
+          const rect = { left, top, right: left + width, bottom: top + height };
+          const overflow = Math.max(0, pad - left) + Math.max(0, pad - top)
             + Math.max(0, rect.right - (W - pad)) + Math.max(0, rect.bottom - (H - pad));
           const overlap = obstacles.reduce((sum, obstacle) => sum + rectOverlapArea(rect, obstacle), 0);
-          const fits = overflow === 0;
-          return { left, top, overflow, overlap, fits, score: overlap * 100 + overflow * 10000 };
+          const preferred = candidateSide === side ? -1 : 0;
+          return { left, top, overflow, overlap, score: overlap * 100000 + overflow * 1000 + preferred };
         });
-        const chosen = options.find((o) => o.fits && o.overlap === 0)
-          || options.slice().sort((a, b) => a.score - b.score)[0];
-        const left = Math.max(pad, Math.min(chosen.left, W - width - pad));
-        const top = Math.max(pad, Math.min(chosen.top, H - height - pad));
+        candidates.sort((a, b) => a.score - b.score);
+        const chosen = candidates[0];
+        let left = chosen.left, top = chosen.top;
+        if (chosen.overlap === 0) {
+          left = Math.max(pad, Math.min(left, W - width - pad));
+          top = Math.max(pad, Math.min(top, H - height - pad));
+        } else {
+          left = Math.max(pad - width + 24, Math.min(left, W - pad - 24));
+          top = Math.max(pad - height + 24, Math.min(top, H - pad - 24));
+        }
         menuEl.style.left = (left / u) + 'px';
         menuEl.style.top = (top / u) + 'px';
         return;
