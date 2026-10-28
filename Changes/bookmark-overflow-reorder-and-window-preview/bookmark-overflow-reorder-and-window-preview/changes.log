@@ -33,3 +33,4 @@ Follow-up 2026-10-28 — bookmark popup layering and drag-open folders
 - Remove the blue before/after marker on the tab bar specifically for bookmark drags; tab-to-tab drag indicators are unchanged.
 
 Validation: syntax parsing passed for content.js, fn-menu.js, fn-bookmarks.js, and fn-css.js. Static assertions confirmed folder drag guards are gone and drag-hover listeners are present. No live Chrome UI test was run.
+- Final placement polish: nested submenus retain their normal right-side placement when the left and right options score equally.

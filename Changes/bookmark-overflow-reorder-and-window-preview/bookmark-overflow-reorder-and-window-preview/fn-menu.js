@@ -162,7 +162,8 @@
             const rightRect = sm.getBoundingClientRect();
             sm.classList.add('flip');
             const leftRect = sm.getBoundingClientRect();
-            if (score(leftRect) > score(rightRect)) sm.classList.remove('flip');
+            // Keep the normal right-side placement when both sides are equally clear.
+            if (score(leftRect) >= score(rightRect)) sm.classList.remove('flip');
             const r = sm.getBoundingClientRect();
             let shiftY = 0;
             if (r.bottom > H - pad) shiftY = H - pad - r.bottom;
