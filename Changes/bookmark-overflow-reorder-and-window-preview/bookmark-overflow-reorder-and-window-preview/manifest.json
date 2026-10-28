@@ -30,6 +30,7 @@
         "fn-push.js",
         "fn-menu.js",
         "fn-bookmarks.js",
+        "fn-drop.js",
         "content.js"
       ],
       "run_at": "document_start",
