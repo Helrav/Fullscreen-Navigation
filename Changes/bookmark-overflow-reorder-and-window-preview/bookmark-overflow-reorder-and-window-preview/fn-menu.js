@@ -105,8 +105,8 @@
           row.dataset.bmTitle = String(bm.title || '');
           row.dataset.bmUrl = String(bm.url || '');
           row.dataset.bmFolder = bm.folder ? '1' : '0';
-          // Folder rows contain nested submenu DOM, so only leaf bookmarks are draggable sources.
-          row.draggable = bm.folder !== true;
+          // Folder rows are draggable too; content.js supplies a clean drag image without nested submenu DOM.
+          row.draggable = true;
         }
         if (it.tooltip && it.tooltip.title && typeof env.tip === 'function') {
           row.addEventListener('mouseenter', () => {
