@@ -3591,7 +3591,7 @@
       suppressBookmarkClickUntil = 0;
     }
     // The tab insertion marker is only for dragging FullNav tabs. External links/files and bookmark drags must never show it.
-    ui.addEventListener('dragover', () => { if (!dragIds || !dragIds.length) clearMarks(); }, true);
+    ui.addEventListener('dragover', (e) => { if (!isFullNavTabDrag(e)) clearMarks(); }, true);
     ui.addEventListener('click', suppressBookmarkClickAfterDrag, true);
     ui.addEventListener('dragstart', bookmarkDragStart);
     ui.addEventListener('dragover', bookmarkDragOver);
