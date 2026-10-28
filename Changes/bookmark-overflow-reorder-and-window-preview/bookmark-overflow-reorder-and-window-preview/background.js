@@ -455,7 +455,14 @@ async function bookmarkAction(message, sender) {
       case 'openAt': {
         const found = id ? await bm.getSubTree(id) : [];
         const node = found && found[0];
-        if (!node) return { ok: false, reason: 'missing-bookmark' };
+        // URLs dropped from outside (a link, or a file as a data: URL) need no bookmark.
+        const droppedUrls = Array.isArray(message.urls)
+          ? message.urls.map((value) => String(value || '').trim())
+            .filter((value) => /^(https?|ftp|file|about|chrome|edge|brave|vivaldi|opera|data):/i.test(value))
+          : [];
+        // Dragging a folder only reorders it; it never opens the tabs inside.
+        if (node && node.children) return { ok: false, reason: 'folder-not-opened' };
+        if (!node && !droppedUrls.length) return { ok: false, reason: 'missing-bookmark' };
         const allowedUrl = (value) => /^(https?|ftp|file|about|chrome|edge|brave|vivaldi|opera):/i.test(String(value || ''))
           && !/^javascript:/i.test(String(value || ''));
         const urls = [];
@@ -467,7 +474,8 @@ async function bookmarkAction(message, sender) {
           }
           for (const child of item.children || []) collectUrls(child);
         };
-        collectUrls(node);
+        if (node) collectUrls(node);
+        urls.push(...droppedUrls);
         if (!urls.length) return { ok: false, reason: 'no-bookmarkable-url' };
 
         let targetWindowId = Number.isInteger(message.windowId)
