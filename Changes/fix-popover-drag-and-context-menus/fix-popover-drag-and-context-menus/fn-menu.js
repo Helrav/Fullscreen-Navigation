@@ -6,6 +6,8 @@
     const { ui, root, h } = env;
     let el = null, open = false, contextEl = null, contextOpen = false;
     let folderHoverMode = false;
+    // DISABLED ONLY — folder-as-source dragging stays in code for easy re-enabling.
+    const DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE = true;
     const isOpen = () => open || contextOpen;
 
     function notifyClosedIfLast(wasOpen) {
@@ -101,7 +103,9 @@
           row.dataset.bmTitle = String(bm.title || '');
           row.dataset.bmUrl = String(bm.url || '');
           row.dataset.bmFolder = bm.folder ? '1' : '0';
-          row.draggable = true;
+          // DISABLED ONLY: do not drag the folder entry itself; leaf bookmarks inside it still drag.
+          row.draggable = !(DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE && bm.folder);
+          // Previous behavior retained for easy re-enabling: row.draggable = true;
         }
         if (it.tooltip && it.tooltip.title && typeof env.tip === 'function') {
           row.addEventListener('mouseenter', () => {
