@@ -508,6 +508,12 @@
       el.style.display = 'none';
       return;
     }
+    // DISABLED ONLY for horizontal docked mode: the outside hit buffer is
+    // the same resize line as the bottom/top grip. Vertical rails keep theirs.
+    if (!isVertical()) {
+      el.style.display = 'none';
+      return;
+    }
     const r = els.panel.getBoundingClientRect();
     const size = 3;          // a narrow, outside-only resize buffer
     const inset = 12;        // keep the target away from rounded/end corners
@@ -525,6 +531,8 @@
 
   function nearResizeTarget(x = lastPointer.x, y = lastPointer.y) {
     if (!shown || !els.panel || isBox() || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    // DISABLED ONLY in horizontal docked mode with its resize-line gesture.
+    if (!isVertical()) return false;
     const r = els.panel.getBoundingClientRect();
     const tolerance = 4; // small resize hit band; keep nearby scrollbar thumbs accessible
     if (isVertical()) {
@@ -3419,16 +3427,19 @@
       }
     };
     const moveBookmarkTo = async (source, target) => {
-      let parentId = target.info.parentId;
+      const parentId = target.info.parentId;
       let index = target.info.index;
       if (!parentId || !Number.isInteger(index)) return;
+      // The target index is the insertion boundary before/after the target.
+      // Keep that original index for Chrome: bookmarks.move adjusts an index
+      // internally when moving an item down within the same parent. Pre-decrementing
+      // here made downward moves land back in the original position.
       index += target.after ? 1 : 0;
-      // Chrome expects the final index after the source has been removed when
-      // moving within the same folder.
-      if (source.parentId && source.parentId === parentId
-        && Number.isInteger(source.index) && source.index < index) index--;
-      if (source.parentId && source.parentId === parentId
-        && Number.isInteger(source.index) && source.index === index) return;
+      const sameParent = String(source.parentId) === String(parentId);
+      const finalIndex = sameParent && Number.isInteger(source.index) && source.index < index
+        ? index - 1
+        : index;
+      if (sameParent && Number.isInteger(source.index) && source.index === finalIndex) return;
       await send({ type: 'bookmarkAction', op: 'move', id: source.id, parentId, index });
       if (bookmarks) bookmarks.refresh();
     };
@@ -3454,6 +3465,13 @@
     function bookmarkDragStart(e) {
       const info = bookmarkInfo(e.target);
       if (!info) return;
+      // DISABLED ONLY — retain the folder drag path below, but refuse to start
+      // dragging a folder itself. Bookmark leaves inside its menu stay draggable.
+      const DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE = true;
+      if (DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE && info.folder) {
+        e.preventDefault();
+        return;
+      }
       bookmarkDrag = info;
       dragIds = null;
       dragTarget = null;
