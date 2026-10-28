@@ -157,7 +157,7 @@
               const overflow = Math.max(0, pad - rect.left) + Math.max(0, pad - rect.top)
                 + Math.max(0, rect.right - (W - pad)) + Math.max(0, rect.bottom - (H - pad));
               const overlap = obstacles.reduce((sum, obstacle) => sum + rectOverlapArea(rect, obstacle), 0);
-              return overlap * 100 + overflow * 10000;
+              return overlap * 100000 + overflow * 1000;
             };
             const rightRect = sm.getBoundingClientRect();
             sm.classList.add('flip');
@@ -305,10 +305,9 @@
         candidates.sort((a, b) => a.score - b.score);
         const chosen = candidates[0];
         let left = chosen.left, top = chosen.top;
-        if (chosen.overlap === 0) {
-          left = Math.max(pad, Math.min(left, W - width - pad));
-          top = Math.max(pad, Math.min(top, H - height - pad));
-        } else {
+        if (chosen.overlap !== 0) {
+          // If no clear slot exists, use the least-overlapping position and keep
+          // enough of the popup reachable rather than burying it under the panel.
           left = Math.max(pad - width + 24, Math.min(left, W - pad - 24));
           top = Math.max(pad - height + 24, Math.min(top, H - pad - 24));
         }
