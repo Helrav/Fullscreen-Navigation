@@ -3473,6 +3473,28 @@
       e.dataTransfer.setData('application/x-fullnav-bookmark', String(info.id));
       e.dataTransfer.setData('text/plain', info.url || info.title || 'Bookmark');
       if (info.url) e.dataTransfer.setData('text/uri-list', info.url);
+      // Native drag snapshots of a folder row can include its nested submenu
+      // (and the parent folder's contents). Use only the dragged row's own
+      // label/icon so the preview never contains its ancestors or descendants.
+      const preview = info.el.cloneNode(true);
+      preview.querySelectorAll('.submenu').forEach((node) => node.remove());
+      preview.classList.remove('open', 'bm-dragging');
+      preview.style.position = 'fixed';
+      preview.style.left = '-10000px';
+      preview.style.top = '-10000px';
+      preview.style.display = 'flex';
+      preview.style.alignItems = 'center';
+      preview.style.gap = '8px';
+      preview.style.maxWidth = '260px';
+      preview.style.padding = '6px 10px';
+      preview.style.borderRadius = '8px';
+      preview.style.background = 'var(--bg)';
+      preview.style.color = 'var(--fg)';
+      preview.style.boxShadow = '0 0 0 1px var(--line)';
+      preview.style.opacity = '1';
+      ui.appendChild(preview);
+      try { e.dataTransfer.setDragImage(preview, 12, 12); } catch (_) {}
+      requestAnimationFrame(() => preview.remove());
       hideTip();
       clearClose();
     }
