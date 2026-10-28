@@ -1154,11 +1154,16 @@
       win.dataset.win = String(w.id);
       const wh = h('div', 'whead' + (closed ? ' closed' : ''));
       wh.dataset.win = String(w.id);
-      wh.title = closed ? 'Expand tabs' : 'Collapse tabs';
+      const windowName = String(w.name || '').trim();
+      wh.title = [windowName, closed ? 'Expand tabs' : 'Collapse tabs'].filter(Boolean).join(' — ');
+      if (windowName) wh.dataset.title = windowName;
       wh.setAttribute('aria-expanded', String(!closed));
-      // Match vertical mode: the header is the collapse control and shows only
-      // the window icon and tab count. Window names are intentionally omitted.
-      wh.append(windowIcon(), h('span', 'wcount', w.tabs.length + ' Tabs'));
+      // Keep custom window names visible in the other-window preview. Compact
+      // icon mode hides the label visually, while dataset.title keeps the name
+      // available through the overlay's hover tooltip.
+      wh.appendChild(windowIcon());
+      if (windowName) wh.appendChild(h('span', 'wlabel', windowName));
+      wh.appendChild(h('span', 'wcount', w.tabs.length + ' Tabs'));
       const wb = h('div', 'wbody');
       for (const t of w.tabs || []) {
         // Background-window active tabs must not get the current-tab marker.
@@ -3428,19 +3433,21 @@
     };
     const moveBookmarkTo = async (source, target) => {
       const parentId = target.info.parentId;
-      let index = target.info.index;
-      if (!parentId || !Number.isInteger(index)) return;
-      // The target index is the insertion boundary before/after the target.
-      // Keep that original index for Chrome: bookmarks.move adjusts an index
-      // internally when moving an item down within the same parent. Pre-decrementing
-      // here made downward moves land back in the original position.
-      index += target.after ? 1 : 0;
-      const sameParent = String(source.parentId) === String(parentId);
-      const finalIndex = sameParent && Number.isInteger(source.index) && source.index < index
-        ? index - 1
-        : index;
-      if (sameParent && Number.isInteger(source.index) && source.index === finalIndex) return;
-      await send({ type: 'bookmarkAction', op: 'move', id: source.id, parentId, index });
+      const index = target.info.index;
+      if (!parentId || !Number.isInteger(index) || !target.info.id) return;
+      // Pass the target identity, not just its rendered index. In the horizontal
+      // bookmark overflow (»), the visible rows are a slice of the full bar and
+      // can hold stale indices after a tree refresh. The background resolves the
+      // current sibling index immediately before moving, including the direction.
+      await send({
+        type: 'bookmarkAction',
+        op: 'move',
+        id: source.id,
+        parentId,
+        index: index + (target.after ? 1 : 0),
+        targetId: target.info.id,
+        after: !!target.after
+      });
       if (bookmarks) bookmarks.refresh();
     };
     const openBookmarkAt = async (source, target) => {

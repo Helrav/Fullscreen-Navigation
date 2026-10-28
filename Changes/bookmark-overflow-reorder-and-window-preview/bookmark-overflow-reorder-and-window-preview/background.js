@@ -405,7 +405,33 @@ async function bookmarkAction(message, sender) {
           || (node.children || []).some((child) => contains(child, targetId));
         if (contains(source, destination.id)) return { ok: false, reason: 'move-into-self' };
         const details = { parentId: String(message.parentId) };
-        if (Number.isInteger(message.index)) details.index = Math.max(0, message.index);
+
+        if (message.targetId != null) {
+          // Resolve the drop target against the live bookmark tree. The horizontal
+          // overflow menu (») renders only a slice of the bookmark bar, so its
+          // stored row indices are not authoritative after a reorder/refresh.
+          const targetId = String(message.targetId);
+          if (targetId === id) return { ok: false, reason: 'same-bookmark' };
+          const targetNode = destination.children.find((child) => String(child.id) === targetId);
+          if (!targetNode) return { ok: false, reason: 'target-not-in-destination' };
+          const targetIndex = Number.isInteger(targetNode.index)
+            ? targetNode.index
+            : destination.children.indexOf(targetNode);
+          const requestedIndex = Math.max(0, targetIndex + (message.after ? 1 : 0));
+
+          // Chrome adjusts the index itself when a bookmark is moved downward
+          // within the same parent. Account for that only when detecting a no-op;
+          // pass Chrome the unadjusted insertion boundary below.
+          if (String(source.parentId) === String(destination.id) && Number.isInteger(source.index)) {
+            const resultingIndex = source.index < requestedIndex ? requestedIndex - 1 : requestedIndex;
+            if (resultingIndex === source.index) return { ok: true, unchanged: true };
+          }
+          details.index = requestedIndex;
+        } else if (Number.isInteger(message.index)) {
+          // Compatibility fallback for other callers that send only an index.
+          details.index = Math.max(0, message.index);
+        }
+
         await bm.move(id, details);
         scheduleBookmarks();
         return { ok: true };

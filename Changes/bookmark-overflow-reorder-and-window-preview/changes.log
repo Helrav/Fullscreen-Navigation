@@ -7,3 +7,11 @@ Fix folder-source drag disable, bookmark reorder direction, and horizontal resiz
 - Existing overlay-drag behavior closes open menus at the movement threshold. Tab tooltips stay outside the horizontal/vertical tab strip.
 
 Validation: edited JavaScript files pass syntax parsing and same-parent reorder cases were checked against the insertion-index calculation. No live Chrome UI test was run.
+
+Update 2026-10-28 — bookmark overflow reorder and window preview
+
+- Resolve bookmark drop targets against the current Chrome bookmark tree before moving. The horizontal More (») menu renders only the overflow slice, so its displayed row indices are not authoritative for same-folder reorder operations.
+- Show saved FullNav window names in the horizontal other-window preview and retain a hover tooltip in compact icon mode.
+- Chrome's public extension windows API does not expose the native Chrome taskbar/window-preview naming control; these labels remain FullNav labels and do not change page titles.
+
+Validation: JavaScript syntax parsing passed for the edited scripts, and representative same-parent reorder directions were checked against Chrome's index-adjustment behavior. No live Chrome UI test was run.
