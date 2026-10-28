@@ -47,3 +47,11 @@ Follow-up 2026-10-28 — correct bookmark popup placement and drag feedback
 - Clear tab-bar insertion markers for non-tab drags (bookmark items and external links/files), without changing the normal before/after indicators for actual tab-to-tab reordering.
 
 Validation: JavaScript syntax parsing passed for fn-menu.js, fn-bookmarks.js, content.js, and fn-css.js. Static assertions confirmed the root popup class/placement, four-sided positioning, folder drag sources and sanitized drag image, root and nested drag-open handlers, non-tab drag marker clearing, opaque drag source, and modal/tooltip layering. No live Chrome UI test has been run.
+
+
+Follow-up 2026-10-28 — remove residual tab markers and collapse descendant bookmark folders
+
+- Mark FullNav tab drags with a dedicated internal data-transfer type. Tab insertion indicators now only render for those tagged tab drags; other dragovers clear them in the capture phase across the overlay, including when an old drag state would otherwise remain.
+- When dragging back over an already-open parent folder, only the directly hovered folder row handles the event. It closes every open folder below itself while keeping its own submenu open, so dragging from D back over C closes D instead of leaving D expanded.
+
+Validation: JavaScript syntax parsing and static assertions passed for the affected handlers and folder nesting behavior. No live Chrome UI test has been run.
