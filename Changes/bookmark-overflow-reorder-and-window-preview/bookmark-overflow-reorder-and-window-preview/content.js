@@ -3266,6 +3266,7 @@
       dragTarget = null;
       tabNode.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/x-fullnav-tabs', dragIds.join(','));
       e.dataTransfer.setData('text/plain', 'fn-tabs:' + dragIds.join(','));
       const preview = h('div', 'dragimg' + (dragIds.length > 1 ? ' multi' : ''));
       const found = getTab(id);
@@ -3276,8 +3277,16 @@
       requestAnimationFrame(() => preview.remove());
       clearClose();
     }
+    function isFullNavTabDrag(e) {
+      return !!(e && e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('application/x-fullnav-tabs'));
+    }
     function tabDragOver(e) {
-      if (!dragIds || !dragIds.length) return;
+      // Never show tab insertion markers for external URLs/files or bookmark drags,
+      // even if a prior tab drag left stale dragIds in memory.
+      if (!dragIds || !dragIds.length || !isFullNavTabDrag(e)) {
+        clearMarks();
+        return;
+      }
       clearMarks();
       const info = determineTarget(e);
       if (!info) { dragTarget = null; return; }
@@ -3300,7 +3309,10 @@
       }
     }
     function tabDragDrop(e) {
-      if (!dragIds || !dragIds.length) return;
+      if (!dragIds || !dragIds.length || !isFullNavTabDrag(e)) {
+        clearMarks();
+        return;
+      }
       e.preventDefault();
       const ids = dragIds;
       const target = determineTarget(e);
@@ -3578,8 +3590,6 @@
       suppressedBookmarkClickIds.clear();
       suppressBookmarkClickUntil = 0;
     }
-    // The tab insertion marker is only for dragging FullNav tabs. External links/files and bookmark drags must never show it.
-    ui.addEventListener('dragover', () => { if (!dragIds || !dragIds.length) clearMarks(); }, true);
     // The tab insertion marker is only for dragging FullNav tabs. External links/files and bookmark drags must never show it.
     ui.addEventListener('dragover', () => { if (!dragIds || !dragIds.length) clearMarks(); }, true);
     ui.addEventListener('click', suppressBookmarkClickAfterDrag, true);
