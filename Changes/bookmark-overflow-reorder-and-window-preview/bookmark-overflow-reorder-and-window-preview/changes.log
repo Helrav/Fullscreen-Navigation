@@ -15,3 +15,4 @@ Update 2026-10-28 — bookmark overflow reorder and window preview
 - Chrome's public extension windows API does not expose the native Chrome taskbar/window-preview naming control; these labels remain FullNav labels and do not change page titles.
 
 Validation: JavaScript syntax parsing passed for the edited scripts, and representative same-parent reorder directions were checked against Chrome's index-adjustment behavior. No live Chrome UI test was run.
+- Clarify the rename menu as FullNav-only: the public extension API cannot rename Chrome's native taskbar/window-preview title.

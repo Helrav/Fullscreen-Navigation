@@ -1586,8 +1586,8 @@
     if (current) {
       items.push({ sep: true });
       items.push({
-        label: 'Name this window',
-        action: () => promptText('Name window', current.name || '', (name) => send({ type: 'renameWindow', windowId: current.id, name }))
+        label: 'Name in FullNav',
+        action: () => promptText('Name window in FullNav', current.name || '', (name) => send({ type: 'renameWindow', windowId: current.id, name }))
       });
     }
     items.push({ sep: true });
@@ -1619,7 +1619,7 @@
       reopen,
       { label: 'Bookmark all tabs…', shortcut: 'Ctrl+Shift+D', disabled: !win.tabs.length, action: () => pickBookmarkFolder(win.tabs.map((tab) => tab.id)) },
       { sep: true },
-      { label: 'Name window…', action: () => promptText('Name window', win.name || '', (name) => send({ type: 'renameWindow', windowId, name })) },
+      { label: 'Name in FullNav…', action: () => promptText('Name window in FullNav', win.name || '', (name) => send({ type: 'renameWindow', windowId, name })) },
       {
         label: isCollapsed ? 'Expand' : 'Collapse',
         action: () => fromWinPop ? toggleWinPopCollapse(windowId) : toggleCollapse('w' + windowId)
