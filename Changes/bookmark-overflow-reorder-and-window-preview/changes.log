@@ -46,4 +46,4 @@ Follow-up 2026-10-28 — correct bookmark popup placement and drag feedback
 - Keep the dragged source opaque.
 - Clear tab-bar insertion markers for non-tab drags (bookmark items and external links/files), without changing the normal before/after indicators for actual tab-to-tab reordering.
 
-Validation: source assertions and JavaScript syntax checks are pending; no live Chrome UI test has been run.
+Validation: JavaScript syntax parsing passed for fn-menu.js, fn-bookmarks.js, content.js, and fn-css.js. Static assertions confirmed the root popup class/placement, four-sided positioning, folder-source disabling, root and nested drag-open handlers, non-tab drag marker clearing, opaque drag source, and modal/tooltip layering. No live Chrome UI test has been run.
