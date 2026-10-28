@@ -97,8 +97,8 @@
       target.dataset.bmTitle = n.title || '';
       target.dataset.bmUrl = n.url || '';
       target.dataset.bmFolder = n.children ? '1' : '0';
-      // Folder entries remain drop targets; only leaf bookmark items are draggable sources.
-      target.draggable = !n.children;
+      // Folder entries and leaf bookmark items are draggable sources; drag images are sanitized in content.js.
+      target.draggable = true;
     }
 
     function makeModeToggle(targetMode) {
