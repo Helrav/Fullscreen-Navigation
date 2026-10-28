@@ -3,6 +3,8 @@
 //  - overlay on top/bottom : a Chrome-style bar with a » button for what does not fit
 (() => {
   const X = (globalThis.FNX = globalThis.FNX || {});
+  // DISABLED ONLY — keep folder-source dragging code available for deliberate re-enabling.
+  const DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE = true;
 
   X.createBookmarks = (env) => {
     const { ui, h } = env;
@@ -97,7 +99,9 @@
       target.dataset.bmTitle = n.title || '';
       target.dataset.bmUrl = n.url || '';
       target.dataset.bmFolder = n.children ? '1' : '0';
-      target.draggable = true;
+      // DISABLED ONLY: folders themselves are not draggable; their contents remain draggable.
+      target.draggable = !(DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE && !!n.children);
+      // Previous behavior retained for easy re-enabling: target.draggable = true;
     }
 
     function makeModeToggle(targetMode) {
