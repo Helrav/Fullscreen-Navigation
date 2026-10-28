@@ -1,11 +1,9 @@
-Fix popover closing, nested bookmark dragging, and tab tooltip placement
+Fix folder-source drag disable, bookmark reorder direction, and horizontal resize line
 
-- Close the Other windows popover, bookmark folder popovers, nested folder submenus, and context menus when an overlay drag crosses its movement threshold. A click without movement does not dismiss them.
-- Right-clicking blank space in the Other windows popover offers New tab, New window, and the standard reopen-last-closed action instead of the popover-position menu.
-- Right-clicking a popover window header/icon opens the same window context menu as vertical mode. Its Collapse/Expand item reads and updates that popover window's own collapse state.
-- Bookmark entries and folders inside root folder popovers and recursively opened submenus carry the same drag metadata as root bookmark items.
-- Allow native dragging from bookmark rows in menus and support the existing bookmark-tree reorder handling inside folder popovers and nested folders.
-- Add source/drop position feedback to menu-based bookmark entries.
-- Position tab tooltips outside the strip: below a top rail, above a bottom rail, right of a left vertical rail, left of a right vertical rail. The Other windows popover and windowed overlay choose the outside side based on their actual position.
+- Folder entries remain valid drop targets but are no longer draggable sources. This is explicitly marked DISABLED ONLY; the previous draggable assignments and underlying drag handler remain in the code. Leaf bookmarks inside folders and nested subfolders remain draggable.
+- Permit native drag initiation from bookmark leaf rows in folder popovers and nested submenus.
+- Correct same-parent bookmark reordering: preserve the target insertion index when calling Chrome's bookmarks.move rather than decrementing it twice. This fixes drops intended to move an earlier item below a later one.
+- Disable the horizontal docked strip's bottom/top resize-line gesture, including its separate outside hit buffer. Vertical-mode resizing remains unchanged. The original grip markup/handler remains and is marked as disabled only.
+- Existing overlay-drag behavior closes open menus at the movement threshold. Tab tooltips stay outside the horizontal/vertical tab strip.
 
-Validation: edited JavaScript files pass syntax parsing. No live Chrome UI test was run. Live bookmark synchronization was not changed.
+Validation: edited JavaScript files pass syntax parsing and same-parent reorder cases were checked against the insertion-index calculation. No live Chrome UI test was run.
