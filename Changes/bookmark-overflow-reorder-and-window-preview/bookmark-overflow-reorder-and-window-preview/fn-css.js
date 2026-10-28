@@ -401,6 +401,8 @@ globalThis.FNX.CSS = `
 /* ---------- context menu ---------- */
 .menu,.submenu{min-width:190px;padding:5px;border-radius:10px;background:var(--bg2,var(--bg));color:var(--fg);box-shadow:0 0 0 1px var(--line),0 12px 32px rgba(0,0,0,.32);user-select:none;pointer-events:auto;touch-action:manipulation}
 .menu{position:fixed;zoom:var(--u,1);z-index:2147483000}
+/* Folder/overflow popups stay beside the overlay; the panel/bar wins if space is tight. */
+.menu.main{z-index:2}
 /* The one-item position menu should not reserve the normal menu's icon gutter. */
 .menu.compact-context{min-width:0;width:max-content;max-width:calc(100vw - 8px);padding:3px}
 .menu.compact-context .mi{gap:4px;padding:6px 8px}
@@ -427,6 +429,8 @@ globalThis.FNX.CSS = `
 .tip{position:fixed;zoom:var(--u,1);z-index:2147483002;display:none;pointer-events:none;max-width:340px;padding:6px 10px;border-radius:8px;background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line),0 8px 24px rgba(0,0,0,.3)}
 .tip .t1{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tip .t2{margin-top:1px;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Tooltips stay above the overlay normally, but never sit on top of modal editors. */
+.ui:has(.backdrop) .tip{display:none!important}
 
 /* ---------- settings card + rename prompt ---------- */
 .backdrop{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.32);pointer-events:auto;touch-action:none;overscroll-behavior:contain}
@@ -451,7 +455,7 @@ globalThis.FNX.CSS = `
 .fip-gl:hover{background:var(--hover)}
 .fip-gl.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
 /* While a dialog is open, any folder popup under it is a non-interactive backdrop. */
-.ui:has(.prompt) .menu{pointer-events:none!important;z-index:39!important}
+.ui:has(.prompt) .menu,.ui:has(.prompt) .submenu{pointer-events:none!important;z-index:39!important}
 .bmpick{width:340px}
 .bp-check{display:flex;align-items:center;gap:8px;font-size:12px}
 .bp-list{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px}

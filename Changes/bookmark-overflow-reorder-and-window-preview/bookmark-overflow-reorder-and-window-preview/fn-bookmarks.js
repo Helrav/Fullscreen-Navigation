@@ -3,8 +3,6 @@
 //  - overlay on top/bottom : a Chrome-style bar with a » button for what does not fit
 (() => {
   const X = (globalThis.FNX = globalThis.FNX || {});
-  // DISABLED ONLY — keep folder-source dragging code available for deliberate re-enabling.
-  const DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE = true;
 
   X.createBookmarks = (env) => {
     const { ui, h } = env;
@@ -99,9 +97,8 @@
       target.dataset.bmTitle = n.title || '';
       target.dataset.bmUrl = n.url || '';
       target.dataset.bmFolder = n.children ? '1' : '0';
-      // DISABLED ONLY: folders themselves are not draggable; their contents remain draggable.
-      target.draggable = !(DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE && !!n.children);
-      // Previous behavior retained for easy re-enabling: target.draggable = true;
+      // Folder entries and leaf bookmarks can both be dragged as sources.
+      target.draggable = true;
     }
 
     function makeModeToggle(targetMode) {
@@ -284,6 +281,24 @@
       showFolderMenuBeside(toItems(n.children, true, n.id), rect, side, true);
     }
 
+    function isBookmarkDragEvent(e) {
+      return !!(e && e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('application/x-fullnav-bookmark'));
+    }
+
+    function openFolderOnBookmarkDrag(n, button, side, e) {
+      if (!n || !n.children || !isBookmarkDragEvent(e)) return;
+      const id = String(n.id);
+      if (openFolderMenuId === id && env.menu.isMainOpen && env.menu.isMainOpen()) {
+        if (env.menu.activateFolderHoverMode) env.menu.activateFolderHoverMode();
+        return;
+      }
+      openMoreMenu = false;
+      openFolderMenuId = id;
+      env.hideTip();
+      showFolderMenuBeside(toItems(n.children, true, n.id), button.getBoundingClientRect(), side, true);
+      if (env.menu.activateFolderHoverMode) env.menu.activateFolderHoverMode();
+    }
+
 
     async function showContextMenu(e, n) {
       openMoreMenu = false;
@@ -403,6 +418,8 @@
           b.classList.add('bm-folder-menu-trigger');
           const side = (el.dataset.pos === 'below' || el.dataset.pos === 'floating-bottom') ? 'above' : 'below';
           b.addEventListener('mouseenter', () => hoverSwitchFolderMenu(n, b, side));
+          b.addEventListener('dragenter', (e) => openFolderOnBookmarkDrag(n, b, side, e));
+          b.addEventListener('dragover', (e) => openFolderOnBookmarkDrag(n, b, side, e));
           b.addEventListener('click', (e) => {
             if (e.ctrlKey || e.metaKey) { e.preventDefault(); openFolderInBackground(n); return; }
             toggleFolderMenu(n, b, side);

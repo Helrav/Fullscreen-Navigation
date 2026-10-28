@@ -3421,8 +3421,6 @@
       if (!info || info.kind === 'invalid') return;
       if (info.kind === 'bookmark') {
         info.node.classList.add(info.after ? 'bm-drop-after' : 'bm-drop-before');
-      } else if (info.kind === 'tab') {
-        info.node.classList.add(info.after ? 'drop-after' : 'drop-before');
       } else if (info.kind === 'window') {
         (info.node || info.head)?.classList.add('drop-win');
         if (info.head) info.head.dataset.drop = 'Open bookmark here';
@@ -3464,13 +3462,6 @@
     function bookmarkDragStart(e) {
       const info = bookmarkInfo(e.target);
       if (!info) return;
-      // DISABLED ONLY — retain the folder drag path below, but refuse to start
-      // dragging a folder itself. Bookmark leaves inside its menu stay draggable.
-      const DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE = true;
-      if (DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE && info.folder) {
-        e.preventDefault();
-        return;
-      }
       bookmarkDrag = info;
       dragIds = null;
       dragTarget = null;
@@ -3479,6 +3470,7 @@
       clearBookmarkMarks();
       info.el.classList.add('bm-dragging');
       e.dataTransfer.effectAllowed = 'copyMove';
+      e.dataTransfer.setData('application/x-fullnav-bookmark', String(info.id));
       e.dataTransfer.setData('text/plain', info.url || info.title || 'Bookmark');
       if (info.url) e.dataTransfer.setData('text/uri-list', info.url);
       hideTip();

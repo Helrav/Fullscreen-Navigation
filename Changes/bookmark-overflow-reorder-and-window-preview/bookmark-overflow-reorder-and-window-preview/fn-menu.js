@@ -6,8 +6,6 @@
     const { ui, root, h } = env;
     let el = null, open = false, contextEl = null, contextOpen = false;
     let folderHoverMode = false;
-    // DISABLED ONLY — folder-as-source dragging stays in code for easy re-enabling.
-    const DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE = true;
     const isOpen = () => open || contextOpen;
 
     function notifyClosedIfLast(wasOpen) {
@@ -25,6 +23,10 @@
     }
     function isFolderHoverActive() {
       return !!(folderHoverMode && open && el);
+    }
+
+    function isBookmarkDragEvent(e) {
+      return !!(e && e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('application/x-fullnav-bookmark'));
     }
     function hideContext() {
       const wasOpen = contextOpen;
@@ -103,9 +105,8 @@
           row.dataset.bmTitle = String(bm.title || '');
           row.dataset.bmUrl = String(bm.url || '');
           row.dataset.bmFolder = bm.folder ? '1' : '0';
-          // DISABLED ONLY: do not drag the folder entry itself; leaf bookmarks inside it still drag.
-          row.draggable = !(DISABLE_BOOKMARK_FOLDER_DRAG_SOURCE && bm.folder);
-          // Previous behavior retained for easy re-enabling: row.draggable = true;
+          // Folder entries and leaf bookmarks are both draggable sources.
+          row.draggable = true;
         }
         if (it.tooltip && it.tooltip.title && typeof env.tip === 'function') {
           row.addEventListener('mouseenter', () => {
@@ -149,10 +150,25 @@
             sm.classList.remove('flip');
             sm.style.top = '';
             sm.style.display = 'block';
+            const mainMenu = row.closest('.menu.main');
+            const obstacles = mainMenu ? popupObstacleRects() : [];
+            const W = env.vw(), H = env.vh(), pad = 4;
+            const score = (rect) => {
+              const overflow = Math.max(0, pad - rect.left) + Math.max(0, pad - rect.top)
+                + Math.max(0, rect.right - (W - pad)) + Math.max(0, rect.bottom - (H - pad));
+              const overlap = obstacles.reduce((sum, obstacle) => sum + rectOverlapArea(rect, obstacle), 0);
+              return overlap * 100 + overflow * 10000;
+            };
+            const rightRect = sm.getBoundingClientRect();
+            sm.classList.add('flip');
+            const leftRect = sm.getBoundingClientRect();
+            if (score(leftRect) > score(rightRect)) sm.classList.remove('flip');
             const r = sm.getBoundingClientRect();
+            let shiftY = 0;
+            if (r.bottom > H - pad) shiftY = H - pad - r.bottom;
+            if (r.top + shiftY < pad) shiftY += pad - (r.top + shiftY);
+            if (shiftY) sm.style.top = (-6 + shiftY / (env.u() || 1)) + 'px';
             sm.style.display = '';
-            if (r.right > env.vw() - 4) sm.classList.add('flip');
-            if (r.bottom > env.vh() - 4) sm.style.top = (-6 - (r.bottom - env.vh() + 8) / env.u()) + 'px';
           };
           if (it.clickSub) {
             const closeSiblingFolders = () => {
@@ -174,6 +190,13 @@
               if (!folderHoverMode || row.classList.contains('open')) return;
               openThisFolder();
             });
+            const openOnBookmarkDrag = (e) => {
+              if (!it.bookmark || !it.bookmark.folder || it.disabled || !isBookmarkDragEvent(e)) return;
+              folderHoverMode = true;
+              if (!row.classList.contains('open')) openThisFolder();
+            };
+            row.addEventListener('dragenter', openOnBookmarkDrag);
+            row.addEventListener('dragover', openOnBookmarkDrag);
             row.addEventListener('click', (e) => {
               e.stopPropagation();
               if (it.disabled) return;
@@ -215,26 +238,83 @@
       }
     }
 
-    function place(menuEl, x, y, side) {
-      const u = env.u();
-      menuEl.style.left = (x / u) + 'px'; menuEl.style.top = (y / u) + 'px';
-      const r = menuEl.getBoundingClientRect();
-      let nx = x, ny = y;
-      if (side === 'left') nx = x - r.width;
-      if (side === 'above') ny = y - r.height;
-      nx = Math.max(4, Math.min(nx, env.vw() - 4 - r.width));
-      ny = Math.max(4, Math.min(ny, env.vh() - 4 - r.height));
-      menuEl.style.left = (nx / u) + 'px'; menuEl.style.top = (ny / u) + 'px';
+    function popupObstacleRects() {
+      const rects = [], seen = new Set();
+      for (const node of ui.querySelectorAll('.panel,.bm .bmc')) {
+        const r = node.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) continue;
+        const key = [r.left, r.top, r.right, r.bottom].map((v) => Math.round(v)).join(':');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rects.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height });
+      }
+      return rects;
     }
 
-    function show(items, x, y, side, preserveFolderHover = false) {
+    function rectOverlapArea(a, b) {
+      const w = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+      const h = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+      return w * h;
+    }
+
+    function oppositeSide(side) {
+      return ({ above: 'below', below: 'above', left: 'right', right: 'left' })[side] || side;
+    }
+
+    function place(menuEl, x, y, side, anchorRect = null) {
+      const u = env.u() || 1;
+      menuEl.style.left = (x / u) + 'px';
+      menuEl.style.top = (y / u) + 'px';
+      const measured = menuEl.getBoundingClientRect();
+
+      // Bookmark-folder popups stay beside the bar/panel when possible. If no
+      // clear side fits, the overlay is layered above the popup as a final guard.
+      if (menuEl.classList.contains('main') && anchorRect) {
+        const width = measured.width, height = measured.height;
+        const W = env.vw(), H = env.vh(), pad = 4;
+        const obstacles = popupObstacleRects();
+        const options = [side, oppositeSide(side)].map((candidateSide) => {
+          let left, top;
+          if (candidateSide === 'above' || candidateSide === 'below') {
+            left = Math.max(pad, Math.min(anchorRect.left, W - width - pad));
+            top = candidateSide === 'above' ? anchorRect.top - height - pad : anchorRect.bottom + pad;
+          } else {
+            left = candidateSide === 'left' ? anchorRect.left - width - pad : anchorRect.right + pad;
+            top = Math.max(pad, Math.min(anchorRect.top, H - height - pad));
+          }
+          const rect = { left, top, right: left + width, bottom: top + height, width, height };
+          const overflow = Math.max(0, pad - rect.left) + Math.max(0, pad - rect.top)
+            + Math.max(0, rect.right - (W - pad)) + Math.max(0, rect.bottom - (H - pad));
+          const overlap = obstacles.reduce((sum, obstacle) => sum + rectOverlapArea(rect, obstacle), 0);
+          const fits = overflow === 0;
+          return { left, top, overflow, overlap, fits, score: overlap * 100 + overflow * 10000 };
+        });
+        const chosen = options.find((o) => o.fits && o.overlap === 0)
+          || options.slice().sort((a, b) => a.score - b.score)[0];
+        const left = Math.max(pad, Math.min(chosen.left, W - width - pad));
+        const top = Math.max(pad, Math.min(chosen.top, H - height - pad));
+        menuEl.style.left = (left / u) + 'px';
+        menuEl.style.top = (top / u) + 'px';
+        return;
+      }
+
+      let nx = x, ny = y;
+      if (side === 'left') nx = x - measured.width;
+      if (side === 'above') ny = y - measured.height;
+      nx = Math.max(4, Math.min(nx, env.vw() - 4 - measured.width));
+      ny = Math.max(4, Math.min(ny, env.vh() - 4 - measured.height));
+      menuEl.style.left = (nx / u) + 'px';
+      menuEl.style.top = (ny / u) + 'px';
+    }
+
+    function show(items, x, y, side, preserveFolderHover = false, anchorRect = null) {
       const keepFolderHover = folderHoverMode;
       hide();
       folderHoverMode = !!(preserveFolderHover && keepFolderHover);
       if (!items.length) return;
       el = build(items, 'menu', 'main'); ui.appendChild(el); open = true;
       if (env.onOpen) env.onOpen();
-      place(el, x, y, side);
+      place(el, x, y, side, anchorRect);
     }
     function showContext(items, x, y, side, compact = false) {
       hideContext();
@@ -246,24 +326,14 @@
       place(contextEl, x, y, side);
     }
     function showBeside(items, rect, side) {
-      show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side);
+      show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side, false, rect);
     }
     function showBesideAutoVertical(items, rect, preferredSide, preserveFolderHover = false) {
       const side = preferredSide === 'above' ? 'above' : 'below';
-      show(items, rect.left, side === 'below' ? rect.bottom : rect.top, side, preserveFolderHover);
-      if (!open || !el) return;
-      const menuRect = el.getBoundingClientRect();
-      const aboveSpace = Math.max(0, rect.top - 4);
-      const belowSpace = Math.max(0, env.vh() - rect.bottom - 4);
-      const preferredSpace = side === 'above' ? aboveSpace : belowSpace;
-      const oppositeSpace = side === 'above' ? belowSpace : aboveSpace;
-      if (menuRect.height > preferredSpace && oppositeSpace > preferredSpace) {
-        const flipped = side === 'above' ? 'below' : 'above';
-        place(el, rect.left, flipped === 'below' ? rect.bottom : rect.top, flipped);
-      }
+      show(items, rect.left, side === 'below' ? rect.bottom : rect.top, side, preserveFolderHover, rect);
     }
     function switchFolderBeside(items, rect, side) {
-      show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side, true);
+      show(items, side === 'right' ? rect.right : rect.left, side === 'below' ? rect.bottom : rect.top, side, true, rect);
     }
     // Rebuild the open folder popup in place (same position, same opened
     // sub-folders and scroll) after its bookmarks changed.

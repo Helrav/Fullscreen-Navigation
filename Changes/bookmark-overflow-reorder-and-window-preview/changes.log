@@ -24,3 +24,12 @@ Follow-up 2026-10-28 — bookmark drag and overflow correction
 - Prefer the last valid dragover target where native drop events are retargeted in nested/overflow menus. Suppress a trailing click only for the dragged and dropped bookmark IDs, so a reorder cannot immediately trigger either bookmark's open action.
 
 Validation: JavaScript syntax parsing passed for content.js and background.js. Representative upward, downward, end-position, and no-op sibling reorder cases passed simulation. No live Chrome UI test was run.
+
+Follow-up 2026-10-28 — bookmark popup layering and drag-open folders
+
+- Place bookmark-folder and overflow menus beside the panel/bookmark bar when viewport space permits. They choose the clearer side of the anchor; if no clear side fits, the overlay and bookmark bar remain layered above them.
+- Keep hover tooltips above the overlay normally, but hide them over modal backdrops. While bookmark edit/add dialogs are open, folder menus and nested submenus are non-interactive and remain below the dialog.
+- Re-enable dragging folder entries and nested folders as bookmark sources. Dragging an internal bookmark over a folder in the root bar, overflow menu, or nested submenu opens that folder so its contents can be targeted.
+- Remove the blue before/after marker on the tab bar specifically for bookmark drags; tab-to-tab drag indicators are unchanged.
+
+Validation: syntax parsing passed for content.js, fn-menu.js, fn-bookmarks.js, and fn-css.js. Static assertions confirmed folder drag guards are gone and drag-hover listeners are present. No live Chrome UI test was run.
